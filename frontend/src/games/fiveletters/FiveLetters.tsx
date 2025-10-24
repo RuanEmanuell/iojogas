@@ -1,6 +1,15 @@
 import { useState, useEffect } from "react";
+
 import { EndGameModal } from "./components/EndGameModal";
-import { getRandomNumber } from "../../utils/getRandomNumber";
+
+const getRandomNumber = (min: number, max: number): number => {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+};
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 
 const wordArray = [
   "ANDAR", "AGORA", "AVISO", "ANTES", "AREIA",
@@ -31,8 +40,6 @@ export function FiveLetters() {
     () => wordArray[getRandomNumber(0, wordArray.length - 1)]
   );
 
-  console.log(correctWord)
-
   const [timeLeft, setTimeLeft] = useState(60);
   const [score, setScore] = useState(0);
 
@@ -50,39 +57,42 @@ export function FiveLetters() {
   async function testGuess() {
     if (guessWord.length !== 5 || gameState !== 0) return;
 
-    const correctWordArray = correctWord.split("");
-    const guessWordArray = guessWord.split("");
+
+    const currentGuessLetters = guessWord.split(""); 
+    const mutableCorrectWord = correctWord.split(""); 
+    const mutableGuessWord = guessWord.split("");   
+    
     const newGuessArray = guessArray.map(row => [...row]);
     const newGuessWords = guessWords.map(row => [...row]);
 
-    newGuessWords[currentTry] = guessWordArray;
-    setGuessWords(newGuessWords);
+    newGuessWords[currentTry] = currentGuessLetters;
+    setGuessWords(newGuessWords); 
 
     for (let i = 0; i < 5; i++) {
-      await sleep(200);
+      await sleep(100);
 
-      if (guessWordArray[i] === correctWordArray[i]) {
+      if (mutableGuessWord[i] === mutableCorrectWord[i]) {
         newGuessArray[currentTry][i] = 1;
-        correctWordArray[i] = null!; 
-        guessWordArray[i] = null!;
+        mutableCorrectWord[i] = null!; 
+        mutableGuessWord[i] = null!;
       }
     }
 
-    for (let i = 0; i < 5; i++) {
-      if (!guessWordArray[i]) continue; 
 
-      const indexInCorrect = correctWordArray.indexOf(guessWordArray[i]);
+    for (let i = 0; i < 5; i++) {
+      if (!mutableGuessWord[i]) continue; 
+
+      const indexInCorrect = mutableCorrectWord.indexOf(mutableGuessWord[i]);
       if (indexInCorrect !== -1) {
         newGuessArray[currentTry][i] = 3;
-        correctWordArray[indexInCorrect] = null!; 
+        mutableCorrectWord[indexInCorrect] = null!; 
       } else {
-        newGuessArray[currentTry][i] = 2;
+        newGuessArray[currentTry][i] = 2; 
       }
 
       setGuessArray(newGuessArray.map(row => [...row]));
-      await sleep(200);
+      await sleep(100);
     }
-
 
     const isCorrect = guessWord.toUpperCase() === correctWord.toUpperCase();
 
@@ -101,9 +111,6 @@ export function FiveLetters() {
     setGuessWord("");
   }
 
-  function sleep(ms: number) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-  }
 
   function restartGame() {
     setGameState(0);
@@ -115,42 +122,75 @@ export function FiveLetters() {
     setTimeLeft(60);
   }
 
+  const getCellClasses = (cell: number) => {
+    switch (cell) {
+      case 1: return 'bg-green-500 border-white rotate-y-360'; 
+      case 2: return 'bg-red-500 border-white';                  
+      case 3: return 'bg-yellow-400 border-white';               
+      default: return 'bg-[#0D1117]';                       
+    }
+  }
+
   return (
-    <div className="bg-[#0D1117] min-h-screen min-w-screen flex flex-col justify-center items-center">
-      <div className="flex flex-col items-center mb-4">
-        <h2 className="text-white text-xl mb-2">Tempo restante: {timeLeft}s</h2>
-        {guessArray.map((guessRow, rowIndex) => (
-          <div className="flex flex-row" key={rowIndex}>
-            {guessRow.map((cell, cellIndex) => (
-              <div
-                className={`m-1 w-16 h-16 border-gray-700 border-2 rounded-sm transition duration-300 flex justify-center items-center text-white font-bold text-2xl
-${cell === 0
-                    ? 'bg-[#0D1117]'
-                    : cell === 1
-                      ? 'bg-green-500 border-white'
-                      : cell === 2
-                        ? 'bg-red-500 border-white'
-                        : 'bg-yellow-400 border-white'
-                  }`}
-                key={cellIndex}
-              >
-                {guessWords[rowIndex][cellIndex] || ''}
-              </div>
-            ))}
-          </div>
-        ))}
+    <div className="bg-[#0D1117] min-h-screen min-w-screen flex flex-col justify-center items-center p-4" style={{ fontFamily: 'Inter, sans-serif' }}>
+      <div className="flex flex-col items-center mb-6">
+        <h1 className="text-3xl font-extrabold text-white mb-4 shadow-lg">5 Letras</h1>
+        <h2 className="text-white text-xl mb-6 font-semibold border-b border-gray-700 pb-2">Tempo restante: {timeLeft}s</h2>
+
+        {/* Word Grid */}
+        <div className="space-y-2">
+          {guessArray.map((guessRow, rowIndex) => (
+            <div className="flex flex-row space-x-2" key={rowIndex}>
+              {guessRow.map((cell, cellIndex) => (
+                <div
+                  className={`
+                    w-16 h-16 border-gray-700 border-2 rounded-md 
+                    transition duration-500 ease-in-out transform 
+                    flex justify-center items-center text-white font-extrabold text-3xl
+                    ${getCellClasses(cell)}
+                    ${rowIndex === currentTry && guessWords[rowIndex][cellIndex] ? 'animate-pulse' : ''}
+                  `}
+                  key={cellIndex}
+                  style={{
+                    animationDelay: `${cellIndex * 0.1}s`,
+                    perspective: '1000px',
+                    transform: cell !== 0 ? 'rotateX(0deg)' : 'rotateX(0deg)',
+                  }}
+                >
+                  {guessWords[rowIndex][cellIndex] || (
+                    rowIndex === currentTry ? guessWord[cellIndex] || '' : ''
+                  )}
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
       </div>
 
-      <div className="flex flex-col items-center">
+      {/* Input and Submit */}
+      <div className="flex flex-col items-center mt-8">
         <input
-          className="bg-transparent border border-gray-500 rounded-sm w-72 text-white font-bold text-center p-2 mb-4 focus:outline-none focus:border-green-400"
+          className="bg-gray-800 border border-gray-500 rounded-lg w-80 text-white font-bold text-center p-3 mb-4 focus:outline-none focus:border-green-400 text-xl"
           value={guessWord}
           onChange={(e: any) => setGuessWord(e.currentTarget.value.toUpperCase())}
           maxLength={5}
+          disabled={gameState !== 0}
+          placeholder="Digite 5 letras"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && guessWord.length === 5) {
+              testGuess();
+            }
+          }}
         />
         <button
-          className="bg-green-600 hover:bg-green-700 w-72 h-12 rounded-sm text-2xl text-white font-bold transition-all cursor-pointer"
+          className={`
+            w-80 h-14 rounded-lg text-3xl text-white font-bold transition-all shadow-lg
+            ${guessWord.length === 5 && gameState === 0 
+              ? 'bg-green-600 hover:bg-green-700 cursor-pointer' 
+              : 'bg-gray-500 cursor-not-allowed'}
+          `}
           onClick={testGuess}
+          disabled={guessWord.length !== 5 || gameState !== 0}
         >
           ✔️
         </button>
