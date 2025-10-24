@@ -3,10 +3,20 @@ interface EndGameModalProps {
   type: "win" | "lose";
   correctWord?: string;
   tryCount: number;
+  score?: number;       
+  timeLeft?: number;    
   onRestart?: () => void;
 }
 
-export function EndGameModal({ isOpen, type, correctWord, tryCount, onRestart }: EndGameModalProps) {
+export function EndGameModal({
+  isOpen,
+  type,
+  correctWord,
+  tryCount,
+  score,
+  timeLeft,
+  onRestart
+}: EndGameModalProps) {
   return (
     <div
       className={`fixed inset-0 flex justify-center items-center bg-black bg-opacity-70 z-50 transition-opacity duration-300
@@ -21,9 +31,21 @@ export function EndGameModal({ isOpen, type, correctWord, tryCount, onRestart }:
           {type === "win" ? "🎉 Você venceu!" : "❌ Fim de jogo!"}
         </h1>
 
-        <h2 className="text-2xl font-bold mb-4">
+        <h2 className="text-2xl font-bold mb-2">
           {`Tentativas: ${tryCount}`}
         </h2>
+
+        {score !== undefined && (
+          <h2 className="text-2xl font-bold mb-2">
+            {`Pontos: ${score}`}
+          </h2>
+        )}
+
+        {timeLeft !== undefined && (
+          <h2 className="text-2xl font-bold mb-4">
+            {`Tempo restante: ${timeLeft}s`}
+          </h2>
+        )}
 
         {type === "lose" && (
           <p className="text-lg mb-4">

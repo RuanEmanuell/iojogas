@@ -1,36 +1,49 @@
-import { useEffect, useRef, useState } from "react";
-import { io, Socket } from "socket.io-client";
-import { Routes, Route, useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { getRandomNumber } from "../utils/getRandomNumber";
-import { Lobby } from '../lobby/Lobby';
+import { useSocket } from "../utils/socket";
 
 export function Home() {
   const navigate = useNavigate();
+  const socket = useSocket();
   const [userName, setUserName] = useState("");
-  const socket = useRef<Socket | null>(null);
+  const [isSocketReady, setIsSocketReady] = useState(false);
 
-  function createGame() {
-    if (!socket.current) return;
-
-    const roomId = getRandomNumber(1000, 9999).toString();
-    socket.current.emit("createRoom", roomId);
-
-    socket.current.on("roomCreated", ({ roomName }) => {
-      navigate(`/lobby/${roomName}`);
-    });
-  }
-
+  // Registra listener para quando a sala for criada
   useEffect(() => {
-    socket.current = io("http://localhost:3000");
+    if (!socket) return;
 
-    socket.current.on("connect", () => {
-      console.log("✅ Conectado ao servidor!", socket.current?.id);
+    const handleRoomCreated = ({ roomName }: { roomName: string }) => {
+      navigate(`/lobby/${roomName}`, { state: { userName } });
+    };
+
+    socket.on("roomCreated", handleRoomCreated);
+
+    socket.on("connect", () => {
+      console.log("✅ Socket conectado no Home:", socket.id);
+      setIsSocketReady(true); // indica que o socket está pronto
     });
 
     return () => {
-      socket.current?.disconnect();
+      socket.off("roomCreated", handleRoomCreated);
+      socket.off("connect");
     };
-  }, []);
+  }, [socket, navigate, userName]);
+
+function createGame() {
+  if (!socket || !userName) return;
+
+  const roomId = getRandomNumber(1000, 9999).toString();
+
+  // envia também o userName
+  socket.emit("createRoom", roomId, userName);
+
+  socket.once("roomCreated", ({ roomName }: { roomName: string }) => {
+    navigate(`/lobby/${roomName}`, { state: { userName } });
+  });
+}
+
+
 
   return (
     <div className="flex flex-col justify-center items-center h-screen bg-gray-900 text-white">
@@ -48,6 +61,7 @@ export function Home() {
       >
         NOVO JOGO
       </button>
+      {!isSocketReady && <p className="mt-4 text-red-500">Conectando ao servidor...</p>}
     </div>
   );
 }

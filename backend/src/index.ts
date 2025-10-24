@@ -18,15 +18,38 @@ app.get('/', (req, res) => {
   res.send('Servidor Express com TypeScript 🚀');
 });
 
-io.on('connection', (socket) => {
-  socket.on("createRoom", (roomName) => {
-    socket.join(roomName);
-    console.log(`Sala criada: ${roomName} pelo usuário ${socket.id}`);
+const rooms: Record<string, { id: string; userName: string }[]> = {};
 
-    socket.emit("roomCreated", {
-      roomName,
-      message: `Sala "${roomName}" criada com sucesso!`
-    });
+io.on("connection", (socket) => {
+  console.log("🔌 Usuário conectado:", socket.id);
+
+  socket.on("createRoom", (roomName, userName) => {
+    socket.join(roomName);
+
+    // já adiciona o jogador na lista e envia currentPlayers
+    const clients = Array.from(io.sockets.adapter.rooms.get(roomName) || []).map(id =>
+      id === socket.id ? userName : id
+    );
+
+    socket.emit("roomCreated", { roomName });
+    socket.emit("currentPlayers", clients);
+  });
+
+
+  socket.on("joinRoom", (roomName, userName) => {
+    socket.join(roomName);
+
+    if (!rooms[roomName]) rooms[roomName] = [];
+    rooms[roomName].push({ id: socket.id, userName });
+
+    // envia lista completa para quem entrou
+    socket.emit(
+      "currentPlayers",
+      rooms[roomName].map((p) => p.userName)
+    );
+
+    // avisa os outros
+    socket.to(roomName).emit("playerJoined", { userName });
   });
 });
 

@@ -1,20 +1,20 @@
-import { useState } from "react"
+import { useState, useEffect } from "react";
 import { EndGameModal } from "./components/EndGameModal";
 import { getRandomNumber } from "../../utils/getRandomNumber";
 
 const wordArray = [
-  "andar", "agora", "aviso", "antes", "areia",
-  "beber", "busca", "bairro", "banco", "beijo",
-  "certo", "corpo", "carne", "casar", "causa",
-  "dizer", "doces", "duzia", "dados", "doado",
-  "exato", "estar", "exige", "esqui", "elias",
-  "facil", "feliz", "falar", "folha", "falso",
-  "grito", "grama", "gasto", "girar", "gesso",
-  "jogar", "jovem", "junto", "jesus", "janta",
-  "ligar", "lazer", "lindo", "lutar", "limpo",
-  "massa", "meter", "moral", "museu", "movel",
-  "nadar", "noite", "novos", "nobre", "notas",
-  "olhar", "oeste", "ordem", "ousar", "ontem"
+  "ANDAR", "AGORA", "AVISO", "ANTES", "AREIA",
+  "BEBER", "BUSCA", "BANCO", "BEIJO",
+  "CERTO", "CORPO", "CARNE", "CASAR", "CAUSA",
+  "DIZER", "DOCES", "DUZIA", "DADOS", "DOADO",
+  "EXATO", "ESTAR", "EXIGE", "ESQUI",
+  "FACIL", "FELIZ", "FALAR", "FOLHA", "FALSO",
+  "GRITO", "GRAMA", "GASTO", "GIRAR", "GESSO",
+  "JOGAR", "JOVEM", "JUNTO", "JESUS", "JANTA",
+  "LIGAR", "LAZER", "LINDO", "LUTAR", "LIMPO",
+  "MASSA", "METER", "MORAL", "MUSEU", "MOVEL",
+  "NADAR", "NOITE", "NOVOS", "NOBRE", "NOTAS",
+  "OLHAR", "OESTE", "ORDEM", "OUSAR", "ONTEM"
 ];
 
 export function FiveLetters() {
@@ -26,19 +26,32 @@ export function FiveLetters() {
   );
   const [guessWord, setGuessWord] = useState("");
   const [currentTry, setCurrentTry] = useState(0);
-  // 0: jogando, 1: ganhou, 2: perdeu
-  const [gameState, setGameState] = useState(0);
+  const [gameState, setGameState] = useState(0); // 0: jogando, 1: ganhou, 2: perdeu
   const [correctWord, setCorrectWord] = useState(
     () => wordArray[getRandomNumber(0, wordArray.length - 1)]
   );
 
-  console.log(correctWord);
+  console.log(correctWord)
+
+  const [timeLeft, setTimeLeft] = useState(60);
+  const [score, setScore] = useState(0);
+
+  useEffect(() => {
+    if (gameState !== 0) return;
+    if (timeLeft === 0) {
+      setGameState(2);
+      return;
+    }
+
+    const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [timeLeft, gameState]);
 
   async function testGuess() {
     if (guessWord.length !== 5 || gameState !== 0) return;
 
-    const correctWordArray = correctWord.toUpperCase().split("");
-    const guessWordArray = guessWord.toUpperCase().split("");
+    const correctWordArray = correctWord.split("");
+    const guessWordArray = guessWord.split("");
     const newGuessArray = guessArray.map(row => [...row]);
     const newGuessWords = guessWords.map(row => [...row]);
 
@@ -55,6 +68,11 @@ export function FiveLetters() {
     const isCorrect = guessWord.toUpperCase() === correctWord.toUpperCase();
 
     if (isCorrect) {
+      const basePoints = 100;
+      const penalty = currentTry * 20;
+      const bonus = timeLeft * 2;
+      const finalScore = Math.max(basePoints - penalty + bonus, 0);
+      setScore(finalScore);
       setGameState(1);
     } else if (currentTry === 4) {
       setGameState(2);
@@ -75,11 +93,13 @@ export function FiveLetters() {
     setGuessArray(Array(5).fill(null).map(() => Array(5).fill(0)));
     setGuessWords(Array(5).fill(null).map(() => Array(5).fill("")));
     setCorrectWord(wordArray[getRandomNumber(0, wordArray.length - 1)]);
+    setTimeLeft(60);
   }
 
   return (
     <div className="bg-[#0D1117] min-h-screen min-w-screen flex flex-col justify-center items-center">
-      <div className="flex flex-col items-center mb-8">
+      <div className="flex flex-col items-center mb-4">
+        <h2 className="text-white text-xl mb-2">Tempo restante: {timeLeft}s</h2>
         {guessArray.map((guessRow, rowIndex) => (
           <div className="flex flex-row" key={rowIndex}>
             {guessRow.map((cell, cellIndex) => (
@@ -104,7 +124,7 @@ export function FiveLetters() {
         <input
           className="bg-transparent border border-gray-500 rounded-sm w-72 text-white font-bold text-center p-2 mb-4 focus:outline-none focus:border-green-400"
           value={guessWord}
-          onChange={(e: any) => setGuessWord(e.currentTarget.value)}
+          onChange={(e: any) => setGuessWord(e.currentTarget.value.toUpperCase())}
           maxLength={5}
         />
         <button
@@ -118,8 +138,10 @@ export function FiveLetters() {
       <EndGameModal
         isOpen={gameState !== 0}
         type={gameState === 1 ? "win" : "lose"}
-        tryCount={currentTry + 1}
+        tryCount={currentTry}
         correctWord={correctWord}
+        timeLeft={timeLeft}
+        score={score}
         onRestart={restartGame}
       />
     </div>
