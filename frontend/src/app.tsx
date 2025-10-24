@@ -6,11 +6,14 @@ import { SocketContext } from "./utils/socket";
 import { FiveLetters } from "./games/fiveletters/FiveLetters";
 import { Home } from "./home/Home";
 
+const apiUrl = import.meta.env.VITE_API_URL;
+
 export function App() {
   const [socket, setSocket] = useState<Socket | null>(null);
 
   useEffect(() => {
-    const s = io("http://localhost:3000");
+    const s = io(apiUrl!);
+    
     setSocket(s);
 
     s.on("connect", () => {
