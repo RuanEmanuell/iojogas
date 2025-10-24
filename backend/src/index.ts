@@ -21,9 +21,15 @@ app.get('/', (req, res) => {
 io.on('connection', (socket) => {
   socket.on("createRoom", (roomName) => {
     socket.join(roomName);
-    console.log(roomName);
+    console.log(`Sala criada: ${roomName} pelo usuário ${socket.id}`);
+
+    socket.emit("roomCreated", {
+      roomName,
+      message: `Sala "${roomName}" criada com sucesso!`
+    });
   });
 });
+
 
 server.listen(PORT, () => {
   console.log(`Servidor rodando em http://localhost:${PORT}`);
