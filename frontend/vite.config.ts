@@ -7,4 +7,9 @@ export default defineConfig(async () => ({
     react(),
     tailwindcss(),
   ],
+  build: {
+    rollupOptions: {
+      input: "/index.html"
+    }
+  }
 }));
