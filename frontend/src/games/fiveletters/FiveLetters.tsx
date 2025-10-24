@@ -60,10 +60,29 @@ export function FiveLetters() {
 
     for (let i = 0; i < 5; i++) {
       await sleep(200);
-      newGuessArray[currentTry][i] =
-        correctWordArray[i] === guessWordArray[i] ? 1 : 2;
-      setGuessArray(newGuessArray.map(row => [...row]));
+
+      if (guessWordArray[i] === correctWordArray[i]) {
+        newGuessArray[currentTry][i] = 1;
+        correctWordArray[i] = null!; 
+        guessWordArray[i] = null!;
+      }
     }
+
+    for (let i = 0; i < 5; i++) {
+      if (!guessWordArray[i]) continue; 
+
+      const indexInCorrect = correctWordArray.indexOf(guessWordArray[i]);
+      if (indexInCorrect !== -1) {
+        newGuessArray[currentTry][i] = 3;
+        correctWordArray[indexInCorrect] = null!; 
+      } else {
+        newGuessArray[currentTry][i] = 2;
+      }
+
+      setGuessArray(newGuessArray.map(row => [...row]));
+      await sleep(200);
+    }
+
 
     const isCorrect = guessWord.toUpperCase() === correctWord.toUpperCase();
 
@@ -105,11 +124,13 @@ export function FiveLetters() {
             {guessRow.map((cell, cellIndex) => (
               <div
                 className={`m-1 w-16 h-16 border-gray-700 border-2 rounded-sm transition duration-300 flex justify-center items-center text-white font-bold text-2xl
-                  ${cell === 0
+${cell === 0
                     ? 'bg-[#0D1117]'
                     : cell === 1
                       ? 'bg-green-500 border-white'
-                      : 'bg-red-500 border-white'
+                      : cell === 2
+                        ? 'bg-red-500 border-white'
+                        : 'bg-yellow-400 border-white'
                   }`}
                 key={cellIndex}
               >

@@ -26,7 +26,6 @@ io.on("connection", (socket) => {
   socket.on("createRoom", (roomName, userName) => {
     socket.join(roomName);
 
-    // já adiciona o jogador na lista e envia currentPlayers
     const clients = Array.from(io.sockets.adapter.rooms.get(roomName) || []).map(id =>
       id === socket.id ? userName : id
     );
@@ -42,13 +41,11 @@ io.on("connection", (socket) => {
     if (!rooms[roomName]) rooms[roomName] = [];
     rooms[roomName].push({ id: socket.id, userName });
 
-    // envia lista completa para quem entrou
     socket.emit(
       "currentPlayers",
       rooms[roomName].map((p) => p.userName)
     );
 
-    // avisa os outros
     socket.to(roomName).emit("playerJoined", { userName });
   });
 });
