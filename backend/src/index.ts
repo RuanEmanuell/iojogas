@@ -3,11 +3,13 @@ import { createServer } from 'node:http';
 import { Server } from "socket.io";
 
 import dotenv from "dotenv";
+import { getRandomNumber } from './utils/getRandomNumber';
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const server = createServer(app);
+
 const io = new Server(server, {
   cors: {
     origin: process.env.FRONTEND_URL || "http://localhost:5173",
@@ -22,6 +24,7 @@ app.get('/', (req, res) => {
 });
 
 const rooms: Record<string, { id: string; userName: string }[]> = {};
+const availableGames = ["FiveLetters"];
 
 io.on("connection", (socket) => {
   console.log("🔌 Usuário conectado:", socket.id);
@@ -51,9 +54,21 @@ io.on("connection", (socket) => {
 
     socket.to(roomName).emit("playerJoined", { userName });
   });
+
+  socket.on("startGame", (roomName) => {
+  
+    const currentGame = availableGames[getRandomNumber(0, availableGames.length - 1)];
+
+    io.to(roomName).emit("gameStarted", {
+      message: `O jogo da sala ${roomName} começou!`,
+      game: currentGame,
+      players: rooms[roomName].map((p) => p.userName)
+    });
+
+  });
 });
 
 
 server.listen(PORT, () => {
-  console.log(`Servidor rodando em http://localhost:${PORT}`);
+  console.log(`Servidor rodando na porta ${PORT} 🚀`);
 });

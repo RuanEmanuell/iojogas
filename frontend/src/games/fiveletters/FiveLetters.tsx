@@ -132,7 +132,7 @@ export function FiveLetters() {
   }
 
   return (
-    <div className="bg-[#0D1117] min-h-screen min-w-screen flex flex-col justify-center items-center p-4" style={{ fontFamily: 'Inter, sans-serif' }}>
+    <div className="bg-[#0D1117] min-h-screen min-w-screen flex flex-col justify-center items-center p-4">
       <div className="flex flex-col items-center mb-6">
         <h1 className="text-3xl font-extrabold text-white mb-4 shadow-lg">5 Letras</h1>
         <h2 className="text-white text-xl mb-6 font-semibold border-b border-gray-700 pb-2">Tempo restante: {timeLeft}s</h2>

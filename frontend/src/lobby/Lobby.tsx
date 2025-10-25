@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useLocation } from "react-router-dom";
 import { useSocket } from "../utils/socket";
+import { getRandomNumber } from "../utils/getRandomNumber";
+import { FiveLetters } from "../games/fiveletters/FiveLetters";
 
 export function Lobby() {
     const socket = useSocket();
@@ -14,6 +16,10 @@ export function Lobby() {
     const [hasName, setHasName] = useState<boolean>(!!initialName);
     const [currentPlayers, setCurrentPlayers] = useState<string[]>([]);
     const [copied, setCopied] = useState(false);
+    const [gameStarted, setGameStarted] = useState(false);
+    const [currentGame, setCurrentGame] = useState("");
+
+    const availableGames = ["FiveLetters"];
 
     const joinedRef = useRef(false);
 
@@ -31,8 +37,14 @@ export function Lobby() {
         const url = `${window.location.origin}/lobby/${roomName}`;
         navigator.clipboard.writeText(url).then(() => {
             setCopied(true);
-            setTimeout(() => setCopied(false), 2000); // volta para "copiar" depois de 2s
+            setTimeout(() => setCopied(false), 2000);
         });
+    }
+
+    function startGame() {
+        if (!socket || !roomName || !userName) return;
+
+        socket.emit("startGame", roomName);
     }
 
     useEffect(() => {
@@ -50,8 +62,15 @@ export function Lobby() {
             setCurrentPlayers(prev => prev.includes(data.userName) ? prev : [...prev, data.userName]);
         };
 
+        const handleGameStarted = (data: { game: string, players: string[] }) => {
+            setGameStarted(true);
+            alert(availableGames[availableGames.indexOf(data.game)])
+            setCurrentGame(availableGames[availableGames.indexOf(data.game)]);
+        }
+
         socket.on("currentPlayers", handleCurrentPlayers);
         socket.on("playerJoined", handlePlayerJoined);
+        socket.on("gameStarted", handleGameStarted);
 
         return () => {
             socket.off("currentPlayers", handleCurrentPlayers);
@@ -80,21 +99,36 @@ export function Lobby() {
         );
     }
 
+    if (!gameStarted && currentGame === "") {
+        return (
+            <div className="flex flex-col justify-center items-center h-screen bg-gray-900 text-white">
+                <h1 className="text-4xl mb-4">Sala: {roomName}</h1>
+                <button
+                    className="mb-4 px-4 py-2 bg-blue-600 rounded-md hover:bg-blue-700"
+                    onClick={copyLink}
+                >
+                    {copied ? "Link copiado!" : "Copiar link da sala"}
+                </button>
+                <h2 className="text-2xl mb-2">Jogadores:</h2>
+                {currentPlayers.map((player, idx) => (
+                    <h3 key={idx}>
+                        {player === userName ? `${userName} (Você)` : player}
+                    </h3>
+                ))}
+
+                <button
+                    className="w-32 h-16 bg-green-600 text-2xl font-bold rounded-md cursor-pointer my-4"
+                    onClick={startGame}
+                >
+                    Começar
+                </button>
+            </div>
+        );
+    }
+
     return (
         <div className="flex flex-col justify-center items-center h-screen bg-gray-900 text-white">
-            <h1 className="text-4xl mb-4">Sala: {roomName}</h1>
-            <button
-                className="mb-4 px-4 py-2 bg-blue-600 rounded-md hover:bg-blue-700"
-                onClick={copyLink}
-            >
-                {copied ? "Link copiado!" : "Copiar link da sala"}
-            </button>
-            <h2 className="text-2xl mb-2">Jogadores:</h2>
-            {currentPlayers.map((player, idx) => (
-                <h3 key={idx}>
-                    {player === userName ? `${userName} (Você)` : player}
-                </h3>
-            ))}
+            {currentGame === "FiveLetters" && <FiveLetters></FiveLetters>}
         </div>
     );
 }

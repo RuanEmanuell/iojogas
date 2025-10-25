@@ -9,7 +9,6 @@ export function Home() {
   const [userName, setUserName] = useState("");
   const [isSocketReady, setIsSocketReady] = useState(false);
 
-  // Registra listener para quando a sala for criada
   useEffect(() => {
     if (!socket) return;
 
@@ -21,7 +20,7 @@ export function Home() {
 
     socket.on("connect", () => {
       console.log("✅ Socket conectado no Home:", socket.id);
-      setIsSocketReady(true); // indica que o socket está pronto
+      setIsSocketReady(true); 
     });
 
     return () => {
@@ -35,7 +34,6 @@ function createGame() {
 
   const roomId = getRandomNumber(1000, 9999).toString();
 
-  // envia também o userName
   socket.emit("createRoom", roomId, userName);
 
   socket.once("roomCreated", ({ roomName }: { roomName: string }) => {

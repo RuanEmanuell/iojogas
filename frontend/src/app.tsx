@@ -3,7 +3,6 @@ import { Routes, Route } from "react-router-dom";
 import { io, Socket } from "socket.io-client";
 import { Lobby } from "./lobby/Lobby";
 import { SocketContext } from "./utils/socket";
-import { FiveLetters } from "./games/fiveletters/FiveLetters";
 import { Home } from "./home/Home";
 
 const apiUrl = import.meta.env.VITE_API_URL;
@@ -30,7 +29,6 @@ export function App() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/lobby/:roomName" element={<Lobby />} />
-        <Route path="/game/:roomName" element={<FiveLetters />} />
       </Routes>
     </SocketContext.Provider>
   );
