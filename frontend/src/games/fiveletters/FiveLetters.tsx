@@ -28,10 +28,10 @@ const wordArray = [
 
 export function FiveLetters() {
   const [guessArray, setGuessArray] = useState<number[][]>(() =>
-    Array(5).fill(null).map(() => Array(5).fill(0))
+    Array(1).fill(null).map(() => Array(5).fill(0))
   );
   const [guessWords, setGuessWords] = useState<string[][]>(() =>
-    Array(5).fill(null).map(() => Array(5).fill(""))
+    Array(1).fill(null).map(() => Array(5).fill(""))
   );
   const [guessWord, setGuessWord] = useState("");
   const [currentTry, setCurrentTry] = useState(0);
@@ -40,15 +40,12 @@ export function FiveLetters() {
     () => wordArray[getRandomNumber(0, wordArray.length - 1)]
   );
 
-  const [timeLeft, setTimeLeft] = useState(60);
+  const [timeLeft, setTimeLeft] = useState(30);
+  const [currentPlayer, setCurrentPlayer] = useState("");
   const [score, setScore] = useState(0);
 
   useEffect(() => {
     if (gameState !== 0) return;
-    if (timeLeft === 0) {
-      setGameState(2);
-      return;
-    }
 
     const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
     return () => clearTimeout(timer);
@@ -103,8 +100,9 @@ export function FiveLetters() {
       const finalScore = Math.max(basePoints - penalty + bonus, 0);
       setScore(finalScore);
       setGameState(1);
-    } else if (currentTry === 4) {
-      setGameState(2);
+    } else {
+      setGuessArray((prev) => [...prev, Array(5).fill(0)]);
+      setGuessWords((prev) => [...prev, Array(5).fill("")]);
     }
 
     setCurrentTry(prev => prev + 1);
@@ -116,10 +114,10 @@ export function FiveLetters() {
     setGameState(0);
     setCurrentTry(0);
     setGuessWord("");
-    setGuessArray(Array(5).fill(null).map(() => Array(5).fill(0)));
-    setGuessWords(Array(5).fill(null).map(() => Array(5).fill("")));
+    setGuessArray(Array(1).fill(null).map(() => Array(5).fill(0)));
+    setGuessWords(Array(1).fill(null).map(() => Array(5).fill("")));
     setCorrectWord(wordArray[getRandomNumber(0, wordArray.length - 1)]);
-    setTimeLeft(60);
+    setTimeLeft(30);
   }
 
   const getCellClasses = (cell: number) => {
@@ -135,9 +133,8 @@ export function FiveLetters() {
     <div className="bg-[#0D1117] min-h-screen min-w-screen flex flex-col justify-center items-center p-4">
       <div className="flex flex-col items-center mb-6">
         <h1 className="text-3xl font-extrabold text-white mb-4 shadow-lg">5 Letras</h1>
-        <h2 className="text-white text-xl mb-6 font-semibold border-b border-gray-700 pb-2">Tempo restante: {timeLeft}s</h2>
+        <h2 className="text-white text-xl mb-6 font-semibold border-b border-gray-700 pb-2">Turno do jogador: {currentPlayer} ({timeLeft}s restantes)</h2>
 
-        {/* Word Grid */}
         <div className="space-y-2">
           {guessArray.map((guessRow, rowIndex) => (
             <div className="flex flex-row space-x-2" key={rowIndex}>
@@ -167,7 +164,6 @@ export function FiveLetters() {
         </div>
       </div>
 
-      {/* Input and Submit */}
       <div className="flex flex-col items-center mt-8">
         <input
           className="bg-gray-800 border border-gray-500 rounded-lg w-80 text-white font-bold text-center p-3 mb-4 focus:outline-none focus:border-green-400 text-xl"
@@ -197,12 +193,13 @@ export function FiveLetters() {
       </div>
 
       <EndGameModal
-        isOpen={gameState !== 0}
-        type={gameState === 1 ? "win" : "lose"}
-        tryCount={currentTry}
-        correctWord={correctWord}
-        timeLeft={timeLeft}
-        score={score}
+        isOpen={gameState === 1}
+        winnerName="Ruan"
+        scoreboard={[
+          { name: "Ruan", score: score },
+          { name: "Bianca", score: 80 },
+          { name: "Nathalya", score: 60 },
+        ]}
         onRestart={restartGame}
       />
     </div>
