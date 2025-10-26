@@ -13,23 +13,28 @@ export function Home() {
   useEffect(() => {
     if (!socket) return;
 
-    // Quando o socket conecta, marca como pronto
     const handleConnect = () => {
       console.log("✅ Socket conectado no Home:", socket.id);
       setIsSocketReady(true);
     };
 
-    // Quando o servidor confirma a criação da sala
-    const handleRoomCreated = ({ roomName }: { roomName: string }) => {
+    // O servidor agora envia um callback (acknowlegement)
+    const handleRoomCreated = ({ roomName }: { roomName: string }, callback: () => void) => {
+      // 1. Navega para o lobby
       navigate(`/lobby/${roomName}`, { state: { userName } });
+
+      // 2. Chama o callback para avisar o backend que a navegação ocorreu
+      if (callback) {
+        callback();
+      }
     };
 
     socket.on("connect", handleConnect);
-    socket.on("roomCreated", handleRoomCreated);
+    socket.on("roomCreated", handleRoomCreated as any); // 'as any' para evitar erro de tipagem no callback
 
     return () => {
       socket.off("connect", handleConnect);
-      socket.off("roomCreated", handleRoomCreated);
+      socket.off("roomCreated", handleRoomCreated as any);
     };
   }, [socket, navigate, userName]);
 

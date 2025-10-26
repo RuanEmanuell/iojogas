@@ -1,207 +1,248 @@
-import { useState, useEffect } from "react";
-
+import { useState, useEffect, useMemo } from "react";
+import { Socket } from "socket.io-client";
+import type { GameState, PlayerDisplay } from "../../types/GameState";
 import { EndGameModal } from "./components/EndGameModal";
 
-const getRandomNumber = (min: number, max: number): number => {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
-};
-
-function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
+interface FiveLettersProps {
+    socket: Socket;
+    roomName: string;
 }
 
+export function FiveLetters({ socket, roomName }: FiveLettersProps) {
+    const [gameState, setGameState] = useState<GameState | null>(null);
+    const [guessWord, setGuessWord] = useState("");
+    const [guessError, setGuessError] = useState("");
 
-const wordArray = [
-  "ANDAR", "AGORA", "AVISO", "ANTES", "AREIA",
-  "BEBER", "BUSCA", "BANCO", "BEIJO",
-  "CERTO", "CORPO", "CARNE", "CASAR", "CAUSA",
-  "DIZER", "DOCES", "DUZIA", "DADOS", "DOADO",
-  "EXATO", "ESTAR", "EXIGE", "ESQUI",
-  "FACIL", "FELIZ", "FALAR", "FOLHA", "FALSO",
-  "GRITO", "GRAMA", "GASTO", "GIRAR", "GESSO",
-  "JOGAR", "JOVEM", "JUNTO", "JESUS", "JANTA",
-  "LIGAR", "LAZER", "LINDO", "LUTAR", "LIMPO",
-  "MASSA", "METER", "MORAL", "MUSEU", "MOVEL",
-  "NADAR", "NOITE", "NOVOS", "NOBRE", "NOTAS",
-  "OLHAR", "OESTE", "ORDEM", "OUSAR", "ONTEM"
-];
+    // O ID do jogador atual para saber se é a nossa vez
+    const myPlayerId = socket.id;
 
-export function FiveLetters() {
-  const [guessArray, setGuessArray] = useState<number[][]>(() =>
-    Array(1).fill(null).map(() => Array(5).fill(0))
-  );
-  const [guessWords, setGuessWords] = useState<string[][]>(() =>
-    Array(1).fill(null).map(() => Array(5).fill(""))
-  );
-  const [guessWord, setGuessWord] = useState("");
-  const [currentTry, setCurrentTry] = useState(0);
-  const [gameState, setGameState] = useState(0); // 0: jogando, 1: ganhou, 2: perdeu
-  const [correctWord, setCorrectWord] = useState(
-    () => wordArray[getRandomNumber(0, wordArray.length - 1)]
-  );
+    // Processa o estado do jogo para a exibição
+    const processedPlayers = useMemo<PlayerDisplay[]>(() => {
+        if (!gameState) return [];
 
-  const [timeLeft, setTimeLeft] = useState(30);
-  const [currentPlayer, setCurrentPlayer] = useState("");
-  const [score, setScore] = useState(0);
+        return Object.keys(gameState.players).map(id => {
+            const player = gameState.players[id];
+            return {
+                id,
+                name: player.name,
+                guesses: player.guesses,
+                score: player.score,
+                isCurrentPlayer: id === gameState.currentPlayerId
+            };
+        });
+    }, [gameState]);
 
-  useEffect(() => {
-    if (gameState !== 0) return;
-
-    const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
-    return () => clearTimeout(timer);
-  }, [timeLeft, gameState]);
-
-  async function testGuess() {
-    if (guessWord.length !== 5 || gameState !== 0) return;
-
-
-    const currentGuessLetters = guessWord.split(""); 
-    const mutableCorrectWord = correctWord.split(""); 
-    const mutableGuessWord = guessWord.split("");   
+    // O jogador que está jogando no momento
+    const currentPlayerDisplay = processedPlayers.find(p => p.isCurrentPlayer);
     
-    const newGuessArray = guessArray.map(row => [...row]);
-    const newGuessWords = guessWords.map(row => [...row]);
+    // O meu estado no jogo
+    const myState = processedPlayers.find(p => p.id === myPlayerId);
 
-    newGuessWords[currentTry] = currentGuessLetters;
-    setGuessWords(newGuessWords); 
+    // Se o jogo acabou, quem ganhou
+    const winnerDisplay = gameState?.winnerId 
+        ? processedPlayers.find(p => p.id === gameState.winnerId) 
+        : null;
 
-    for (let i = 0; i < 5; i++) {
-      await sleep(100);
+    // Se é a vez deste jogador
+    const isMyTurn = myPlayerId === gameState?.currentPlayerId;
+    const wordLength = gameState?.wordLength || 6;
+    
+    // Placar para o modal de fim de jogo
+    const scoreboard = processedPlayers.map(p => ({ name: p.name, score: p.score }));
 
-      if (mutableGuessWord[i] === mutableCorrectWord[i]) {
-        newGuessArray[currentTry][i] = 1;
-        mutableCorrectWord[i] = null!; 
-        mutableGuessWord[i] = null!;
-      }
+    // ===================================
+    // SOCKET LISTENERS
+    // ===================================
+
+    useEffect(() => {
+        if (!socket) return;
+
+        // 1. Recebe o estado do jogo do servidor
+        const handleFiveLettersUpdate = (data: { currentGameState: GameState }) => {
+            setGameState(data.currentGameState);
+            setGuessError(""); // Limpa erro ao receber novo estado
+        };
+
+        // 2. Recebe erros de palpite (por exemplo, "Não é sua vez")
+        const handleGuessError = (data: { message: string }) => {
+            setGuessError(data.message);
+        };
+        
+        // 3. Fim de jogo é tratado pela atualização do estado (gameState.gameOver)
+        // Mas mantemos o listener do "gameOver" por segurança
+        const handleGameOver = (data: { winnerId: string, secretWord: string }) => {
+            console.log(`Jogo finalizado. Palavra secreta: ${data.secretWord}`);
+        };
+
+
+        socket.on("fiveLettersUpdate", handleFiveLettersUpdate);
+        socket.on("guessError", handleGuessError);
+        socket.on("gameOver", handleGameOver); // O modal usa o gameState
+
+        return () => {
+            socket.off("fiveLettersUpdate", handleFiveLettersUpdate);
+            socket.off("guessError", handleGuessError);
+            socket.off("gameOver", handleGameOver);
+        };
+    }, [socket]);
+
+    // ===================================
+    // AÇÕES DO JOGADOR
+    // ===================================
+
+    function submitGuessToServer() {
+        if (!gameState || !isMyTurn || guessWord.length !== wordLength) {
+            setGuessError(isMyTurn ? `A palavra deve ter ${wordLength} letras.` : "Aguarde seu turno.");
+            return;
+        }
+
+        // 🚨 NOVO: Envia o palpite para o servidor
+        socket.emit("submitGuess", roomName, guessWord.toUpperCase());
+        setGuessWord("");
     }
 
-
-    for (let i = 0; i < 5; i++) {
-      if (!mutableGuessWord[i]) continue; 
-
-      const indexInCorrect = mutableCorrectWord.indexOf(mutableGuessWord[i]);
-      if (indexInCorrect !== -1) {
-        newGuessArray[currentTry][i] = 3;
-        mutableCorrectWord[indexInCorrect] = null!; 
-      } else {
-        newGuessArray[currentTry][i] = 2; 
-      }
-
-      setGuessArray(newGuessArray.map(row => [...row]));
-      await sleep(100);
+    function restartGame() {
+        // Apenas o admin pode reiniciar (se o backend verificar a permissão)
+        // Por enquanto, apenas um placeholder:
+        // socket.emit('restartGame', roomName);
+        console.log("Reiniciando jogo (implementação no backend pendente).");
     }
 
-    const isCorrect = guessWord.toUpperCase() === correctWord.toUpperCase();
+    // ===================================
+    // RENDERIZAÇÃO
+    // ===================================
 
-    if (isCorrect) {
-      const basePoints = 100;
-      const penalty = currentTry * 20;
-      const bonus = timeLeft * 2;
-      const finalScore = Math.max(basePoints - penalty + bonus, 0);
-      setScore(finalScore);
-      setGameState(1);
-    } else {
-      setGuessArray((prev) => [...prev, Array(5).fill(0)]);
-      setGuessWords((prev) => [...prev, Array(5).fill("")]);
+    // Funções de estilo
+    const getCellClasses = (cell: number) => {
+        switch (cell) {
+            case 1: return 'bg-green-500 border-white rotate-y-360'; // Correto (Verde)
+            case 2: return 'bg-gray-500 border-white';                  // Errado (Cinza, usei gray-500 para ser menos agressivo que red)
+            case 3: return 'bg-yellow-400 border-white';               // Misplaced (Amarelo)
+            default: return 'bg-[#0D1117] border-gray-700';                       
+        }
     }
 
-    setCurrentTry(prev => prev + 1);
-    setGuessWord("");
-  }
-
-
-  function restartGame() {
-    setGameState(0);
-    setCurrentTry(0);
-    setGuessWord("");
-    setGuessArray(Array(1).fill(null).map(() => Array(5).fill(0)));
-    setGuessWords(Array(1).fill(null).map(() => Array(5).fill("")));
-    setCorrectWord(wordArray[getRandomNumber(0, wordArray.length - 1)]);
-    setTimeLeft(30);
-  }
-
-  const getCellClasses = (cell: number) => {
-    switch (cell) {
-      case 1: return 'bg-green-500 border-white rotate-y-360'; 
-      case 2: return 'bg-red-500 border-white';                  
-      case 3: return 'bg-yellow-400 border-white';               
-      default: return 'bg-[#0D1117]';                       
+    if (!gameState) {
+        return <div className="text-white text-2xl">Aguardando início do jogo...</div>;
     }
-  }
 
-  return (
-    <div className="bg-[#0D1117] min-h-screen min-w-screen flex flex-col justify-center items-center p-4">
-      <div className="flex flex-col items-center mb-6">
-        <h1 className="text-3xl font-extrabold text-white mb-4 shadow-lg">5 Letras</h1>
-        <h2 className="text-white text-xl mb-6 font-semibold border-b border-gray-700 pb-2">Turno do jogador: {currentPlayer} ({timeLeft}s restantes)</h2>
-
-        <div className="space-y-2">
-          {guessArray.map((guessRow, rowIndex) => (
-            <div className="flex flex-row space-x-2" key={rowIndex}>
-              {guessRow.map((cell, cellIndex) => (
-                <div
-                  className={`
-                    w-16 h-16 border-gray-700 border-2 rounded-md 
-                    transition duration-500 ease-in-out transform 
-                    flex justify-center items-center text-white font-extrabold text-3xl
-                    ${getCellClasses(cell)}
-                    ${rowIndex === currentTry && guessWords[rowIndex][cellIndex] ? 'animate-pulse' : ''}
-                  `}
-                  key={cellIndex}
-                  style={{
-                    animationDelay: `${cellIndex * 0.1}s`,
-                    perspective: '1000px',
-                    transform: cell !== 0 ? 'rotateX(0deg)' : 'rotateX(0deg)',
-                  }}
-                >
-                  {guessWords[rowIndex][cellIndex] || (
-                    rowIndex === currentTry ? guessWord[cellIndex] || '' : ''
-                  )}
+    return (
+        <div className="bg-[#0D1117] min-h-screen min-w-screen flex flex-col justify-center items-center p-4 relative">
+            
+            {/* Mensagem de Erro/Status */}
+            {guessError && (
+                <div className="absolute top-4 bg-red-600 p-2 rounded-lg text-white font-bold animate-pulse">
+                    {guessError}
                 </div>
-              ))}
+            )}
+
+            {/* Placar Lateral para Desktop */}
+            <div className="hidden lg:block absolute left-4 top-1/2 transform -translate-y-1/2 bg-gray-800 p-4 rounded-xl shadow-2xl">
+                <h3 className="text-xl font-bold mb-3 text-white border-b border-gray-700 pb-1">Placar</h3>
+                <ul className="space-y-2">
+                    {processedPlayers.sort((a, b) => b.score - a.score).map(p => (
+                        <li key={p.id} className={`text-lg font-semibold ${p.isCurrentPlayer ? 'text-green-400' : 'text-gray-300'}`}>
+                            {p.name}: {p.score} pts
+                        </li>
+                    ))}
+                </ul>
             </div>
-          ))}
+
+
+            {/* ===================================
+                INFORMAÇÕES E JOGO PRINCIPAL
+            ==================================== */}
+            <div className="flex flex-col items-center mb-6">
+                <h1 className="text-3xl font-extrabold text-white mb-2 shadow-lg">Five Letters Multiplayer</h1>
+                
+                {/* Informação do Turno */}
+                <h2 className={`text-xl mb-6 font-semibold border-b pb-2 ${isMyTurn ? 'text-yellow-400 border-yellow-700' : 'text-gray-400 border-gray-700'}`}>
+                    {currentPlayerDisplay ? `Turno de: ${currentPlayerDisplay.name}` : 'Aguardando...'}
+                </h2>
+
+                {/* Tabuleiro do JOGADOR ATUAL */}
+                <div className="space-y-2">
+                    {myState?.guesses.map((guessEntry, rowIndex) => (
+                        <div className="flex flex-row space-x-2" key={`my-guess-${rowIndex}`}>
+                            {Array(wordLength).fill(0).map((_, cellIndex) => {
+                                // O feedback está disponível!
+                                const feedbackCell = guessEntry.feedback[cellIndex] || 0;
+                                const letter = guessEntry.word[cellIndex] || '';
+                                return (
+                                    <div
+                                        className={`
+                                            w-12 h-12 sm:w-16 sm:h-16 border-2 rounded-md 
+                                            transition duration-500 ease-in-out transform 
+                                            flex justify-center items-center text-white font-extrabold text-2xl sm:text-3xl
+                                            ${getCellClasses(feedbackCell)}
+                                        `}
+                                        key={cellIndex}
+                                    >
+                                        {letter}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    ))}
+
+                    {/* Linha de Palpite Atual (Input) */}
+                    {!gameState.gameOver && (
+                        <div className="flex flex-row space-x-2">
+                            {Array(wordLength).fill(0).map((_, cellIndex) => (
+                                <div
+                                    className={`
+                                        w-12 h-12 sm:w-16 sm:h-16 border-gray-500 border-2 rounded-md 
+                                        flex justify-center items-center text-white font-extrabold text-2xl sm:text-3xl
+                                        ${isMyTurn && guessWord[cellIndex] ? 'bg-gray-700 border-white' : 'bg-[#0D1117]'}
+                                    `}
+                                    key={`current-input-${cellIndex}`}
+                                >
+                                    {guessWord[cellIndex] || ''}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* ===================================
+                INPUT E BOTÃO
+            ==================================== */}
+            <div className="flex flex-col items-center mt-8">
+                <input
+                    className="bg-gray-800 border border-gray-500 rounded-lg w-80 text-white font-bold text-center p-3 mb-4 focus:outline-none focus:border-green-400 text-xl"
+                    value={guessWord}
+                    onChange={(e: any) => setGuessWord(e.currentTarget.value.toUpperCase().slice(0, wordLength))}
+                    maxLength={wordLength}
+                    disabled={!isMyTurn || gameState.gameOver}
+                    placeholder={isMyTurn ? "Digite seu palpite" : "Aguarde seu turno"}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' && guessWord.length === wordLength) {
+                            submitGuessToServer();
+                        }
+                    }}
+                />
+                <button
+                    className={`
+                        w-80 h-14 rounded-lg text-3xl text-white font-bold transition-all shadow-lg
+                        ${guessWord.length === wordLength && isMyTurn && !gameState.gameOver
+                            ? 'bg-green-600 hover:bg-green-700 cursor-pointer'
+                            : 'bg-gray-500 cursor-not-allowed'}
+                    `}
+                    onClick={submitGuessToServer}
+                    disabled={guessWord.length !== wordLength || !isMyTurn || gameState.gameOver}
+                >
+                    {gameState.gameOver ? 'FIM' : '✔️'}
+                </button>
+            </div>
+
+            {/* Modal de Fim de Jogo */}
+            <EndGameModal
+                isOpen={gameState.gameOver}
+                winnerName={winnerDisplay?.name || 'Desconhecido'}
+                scoreboard={scoreboard}
+                onRestart={restartGame}
+            />
         </div>
-      </div>
-
-      <div className="flex flex-col items-center mt-8">
-        <input
-          className="bg-gray-800 border border-gray-500 rounded-lg w-80 text-white font-bold text-center p-3 mb-4 focus:outline-none focus:border-green-400 text-xl"
-          value={guessWord}
-          onChange={(e: any) => setGuessWord(e.currentTarget.value.toUpperCase())}
-          maxLength={5}
-          disabled={gameState !== 0}
-          placeholder="Digite 5 letras"
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && guessWord.length === 5) {
-              testGuess();
-            }
-          }}
-        />
-        <button
-          className={`
-            w-80 h-14 rounded-lg text-3xl text-white font-bold transition-all shadow-lg
-            ${guessWord.length === 5 && gameState === 0 
-              ? 'bg-green-600 hover:bg-green-700 cursor-pointer' 
-              : 'bg-gray-500 cursor-not-allowed'}
-          `}
-          onClick={testGuess}
-          disabled={guessWord.length !== 5 || gameState !== 0}
-        >
-          ✔️
-        </button>
-      </div>
-
-      <EndGameModal
-        isOpen={gameState === 1}
-        winnerName="Ruan"
-        scoreboard={[
-          { name: "Ruan", score: score },
-          { name: "Bianca", score: 80 },
-          { name: "Nathalya", score: 60 },
-        ]}
-        onRestart={restartGame}
-      />
-    </div>
-  );
+    );
 }
