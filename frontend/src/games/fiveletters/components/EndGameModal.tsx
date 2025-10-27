@@ -6,7 +6,7 @@ interface PlayerScore {
 interface EndGameModalProps {
   isOpen: boolean;
   winnerName: string;
-  scoreboard: PlayerScore[]; // lista com todos os jogadores e suas pontuações
+  scoreboard: PlayerScore[]; 
   onRestart?: () => void;
 }
 
@@ -16,7 +16,6 @@ export function EndGameModal({
   scoreboard,
   onRestart,
 }: EndGameModalProps) {
-  // ordena o placar do maior para o menor
   const sortedScores = [...scoreboard].sort((a, b) => b.score - a.score);
 
   return (

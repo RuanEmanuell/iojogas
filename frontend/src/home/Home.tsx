@@ -18,19 +18,16 @@ export function Home() {
       setIsSocketReady(true);
     };
 
-    // O servidor agora envia um callback (acknowlegement)
     const handleRoomCreated = ({ roomName }: { roomName: string }, callback: () => void) => {
-      // 1. Navega para o lobby
       navigate(`/lobby/${roomName}`, { state: { userName } });
 
-      // 2. Chama o callback para avisar o backend que a navegação ocorreu
       if (callback) {
         callback();
       }
     };
 
     socket.on("connect", handleConnect);
-    socket.on("roomCreated", handleRoomCreated as any); // 'as any' para evitar erro de tipagem no callback
+    socket.on("roomCreated", handleRoomCreated as any); 
 
     return () => {
       socket.off("connect", handleConnect);
@@ -38,7 +35,6 @@ export function Home() {
     };
   }, [socket, navigate, userName]);
 
-  // Criar nova sala
   function createGame() {
     if (!socket || !userName.trim()) return;
 
