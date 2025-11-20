@@ -1,11 +1,8 @@
 import './style.css'
-import { setupCounter } from './counter'
 import { io } from "socket.io-client";
 import { Player } from './types/Player';
 
 const apiUrl = import.meta.env.VITE_API_URL;
-
-setupCounter(document.querySelector<HTMLButtonElement>('#counter')!);
 
 function getRandomInt(max: number) {
   return Math.floor(Math.random() * max);
