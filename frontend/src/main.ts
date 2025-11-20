@@ -1,26 +1,38 @@
 import './style.css'
-import typescriptLogo from './typescript.svg'
-import viteLogo from '/vite.svg'
-import { setupCounter } from './counter.ts'
+import { setupCounter } from './counter'
+import { io } from "socket.io-client";
+import { Player } from './types/Player';
 
-//const apiUrl = import.meta.env.VITE_API_URL;
+const apiUrl = import.meta.env.VITE_API_URL;
 
-document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
-  <div>
-    <a href="https://vite.dev" target="_blank">
-      <img src="${viteLogo}" class="logo" alt="Vite logo" />
-    </a>
-    <a href="https://www.typescriptlang.org/" target="_blank">
-      <img src="${typescriptLogo}" class="logo vanilla" alt="TypeScript logo" />
-    </a>
-    <h1>Vite + TypeScript</h1>
-    <div class="card">
-      <button id="counter" type="button"></button>
-    </div>
-    <p class="read-the-docs">
-      Click on the Vite and TypeScript logos to learn more
-    </p>
-  </div>
-`
+setupCounter(document.querySelector<HTMLButtonElement>('#counter')!);
 
-setupCounter(document.querySelector<HTMLButtonElement>('#counter')!)
+function getRandomInt(max: number) {
+  return Math.floor(Math.random() * max);
+}
+
+const socket = io(apiUrl);
+
+socket.on("connect", () => {
+  let playerName = prompt("Digite seu nome") || "Player" + getRandomInt(9999);
+  socket.emit("createPlayer", playerName);
+});
+
+socket.on("disconnect", () => {
+  console.log("Desconectou do servidor!");
+});
+
+socket.on("playerListUpdate", (playerList: Player[]) => {
+  let playerListDiv = document.querySelector(".playerList");
+  playerListDiv!.innerHTML = "";
+
+  for (let item of playerList) {
+    let playerDiv = document.createElement("div");
+    playerDiv.innerHTML = `${item.name}`
+
+    playerListDiv?.appendChild(playerDiv);
+  }
+  
+
+  console.log("Lista atualizada:", playerList);
+});
