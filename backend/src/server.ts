@@ -42,6 +42,10 @@ io.on("connection", (socket) => {
 
     io.emit("playerListUpdate", playerList);
   });
+
+  socket.on("startGame", () => {
+    io.emit("gameStarted");
+  });
 });
 
 app.use(express.json());
