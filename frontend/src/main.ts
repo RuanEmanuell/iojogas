@@ -84,8 +84,8 @@ socket.on("timerUpdate", (timeLeft: number) => {
   if (el) el.textContent = `Tempo: ${timeLeft}s`
 })
 
-socket.on("timerFinished", () => {
-  showMessage("Tempo esgotou — aguardando próxima pergunta.")
+socket.on("timerFinished", ({ correctAnswer }) => {
+  showMessage(`Tempo acabou! Resposta correta: ${correctAnswer}`)
   disableAnswerInput(true)
 })
 

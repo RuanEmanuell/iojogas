@@ -95,7 +95,7 @@ function changeQuestion() {
         setTimeout(() => {
           io.emit("returnToLobby");
           resetGame();
-        }, 5000); 
+        }, 5000);
 
         return;
       }
@@ -104,10 +104,14 @@ function changeQuestion() {
         clearInterval(questionTimer!);
         questionTimer = null;
 
-        io.emit("timerFinished");
+        io.emit("timerFinished", {
+          correctAnswer: currentQuestion?.answer
+        });
 
         isChangingQuestion = false;
-        changeQuestion();
+        setTimeout(() => {
+          changeQuestion();
+        }, 5000);
       }
 
     }, 1000);
@@ -217,14 +221,14 @@ io.on("connection", (socket) => {
         changeQuestion();
       }, 3000);
 
-      } else {
-        socket.emit("answerReceived", { text, accepted: true });
-        socket.emit("wrongAnswer", { text });     
-        io.emit("someoneTried", { id: socket.id, text });
+    } else {
+      socket.emit("answerReceived", { text, accepted: true });
+      socket.emit("wrongAnswer", { text });
+      io.emit("someoneTried", { id: socket.id, text });
 
-        // Libera o input pra tentar de novo
-        socket.emit("unlockAnswer");
-      }
+      // Libera o input pra tentar de novo
+      socket.emit("unlockAnswer");
+    }
   });
 });
 
