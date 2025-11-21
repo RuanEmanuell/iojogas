@@ -38,4 +38,13 @@ socket.on("playerListUpdate", (playerList: Player[]) => {
   }
 
   console.log("Lista atualizada:", playerList);
+
+  if (socket.id === playerList.find(item => item.leader === true)?.id && !document.querySelector("#startButton")) {
+    const startButton = document.createElement('button');
+    startButton.id = "startButton"
+    startButton.classList.add("bg-green-600", "rounded-lg", "text-2xl", "py-4", "px-6", "font-bold", "cursor-pointer", "hover:bg-green-800", "transition-all");
+    startButton.innerHTML = "Iniciar";
+
+    document.querySelector("#app")?.appendChild(startButton);
+  }
 });
