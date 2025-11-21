@@ -111,7 +111,7 @@ function changeQuestion() {
         isChangingQuestion = false;
         setTimeout(() => {
           changeQuestion();
-        }, 5000);
+        }, 3000);
       }
 
     }, 1000);
