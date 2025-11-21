@@ -179,9 +179,11 @@ function renderQuestion(imageUrl: string, questionId?: number, category?: string
 
   container.append(subtitle)
 
-  const img = document.createElement("img")
-  img.src = imageUrl
-  img.classList.add("max-w-full", "max-h-80", "mb-4")
+  const img = document.createElement("img");
+  img.src = imageUrl;
+
+  img.classList.add("w-96", "h-80", "aspect-square", "object-cover", "object-center", "mb-4", "border-2", "border-white", "rounded-lg", "shadow-lg"
+  );
 
   const countdown = document.createElement("div")
   countdown.id = "countdown"
