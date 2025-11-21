@@ -9,12 +9,29 @@
   <title>iojogas</title>
 </head>
 
-<body>
-  <div id="app" class="bg-gray-800 w-screen h-screen"></div>
-  <div>
-    <h1>Lista de jogadores:</h1>
-    <div class="playerList"></div>
+<body class="bg-gray-900 text-gray-100">
+
+  <div class="flex flex-col md:flex-row min-h-screen">
+
+    <!-- Agora funciona: ocupa 3/4 -->
+    <div id="app" class="flex-[3] bg-gray-800 p-4 flex items-center justify-center">
+      <span class="text-gray-400">Aguardando jogo...</span>
+    </div>
+
+    <!-- Sidebar ocupa 1/4 -->
+    <aside class="flex-[1] bg-gray-850 border-l border-gray-700 p-4">
+      <h2 class="text-xl font-semibold mb-3">Jogadores conectados</h2>
+      <div class="playerList flex flex-col gap-2"></div>
+    </aside>
+
   </div>
+
+  <template id="player-template">
+    <div class="player-item bg-gray-700 rounded-lg p-2 px-3 flex items-center justify-between">
+      <span class="player-name font-medium"></span>
+    </div>
+  </template>
+
   <script type="module" src="/src/main.ts"></script>
 </body>
 

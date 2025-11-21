@@ -4,15 +4,23 @@ import { Player } from './types/Player';
 
 const apiUrl = import.meta.env.VITE_API_URL;
 
-function getRandomInt(max: number) {
-  return Math.floor(Math.random() * max);
-}
-
 const socket = io(apiUrl);
 
+function createPlayerElement(player: Player): HTMLElement {
+  const template = document.querySelector<HTMLTemplateElement>("#player-template")!;
+  const fragment = template.content.cloneNode(true) as DocumentFragment;
+
+  const el = fragment.querySelector(".player-item") as HTMLElement;
+  const nameSpan = el.querySelector(".player-name") as HTMLElement;
+
+  nameSpan.textContent = player.name;
+
+  return el;
+}
+
 socket.on("connect", () => {
-  let playerName = prompt("Digite seu nome") || "Player" + getRandomInt(9999);
-  socket.emit("createPlayer", playerName);
+  const name = prompt("Digite seu nome") || `Player${Math.floor(Math.random() * 9999)}`;
+  socket.emit("createPlayer", name);
 });
 
 socket.on("disconnect", () => {
@@ -20,16 +28,14 @@ socket.on("disconnect", () => {
 });
 
 socket.on("playerListUpdate", (playerList: Player[]) => {
-  let playerListDiv = document.querySelector(".playerList");
-  playerListDiv!.innerHTML = "";
+  const list = document.querySelector(".playerList") as HTMLElement;
 
-  for (let item of playerList) {
-    let playerDiv = document.createElement("div");
-    playerDiv.innerHTML = `${item.name}`
+  list.replaceChildren();
 
-    playerListDiv?.appendChild(playerDiv);
+  for (const p of playerList) {
+    const el = createPlayerElement(p);
+    list.appendChild(el);
   }
-  
 
   console.log("Lista atualizada:", playerList);
 });
