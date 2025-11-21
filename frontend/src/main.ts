@@ -81,7 +81,7 @@ socket.on("changeQuestion", (q) => {
 // Timer
 socket.on("timerUpdate", (timeLeft: number) => {
   const el = document.querySelector("#countdown")
-  if (el) el.textContent = `Tempo: ${timeLeft}s`
+  if (el) el.textContent = `Tempo restante: ${timeLeft}s`
 })
 
 socket.on("timerFinished", ({ correctAnswer }) => {
@@ -109,7 +109,7 @@ socket.on("gameFinished", (playerList: Player[]) => {
 
 // Resposta correta/errada
 socket.on("correctAnswer", (info) => {
-  showMessage(`${info.name} acertou: ${info.answer}`)
+  showMessage(`${info.name} acertou: ${info.answer} em ${info.time}s`)
   disableAnswerInput(true)
 })
 
@@ -202,7 +202,7 @@ function renderQuestion(imageUrl: string, questionId?: number, category?: string
   const countdown = document.createElement("div")
   countdown.id = "countdown"
   countdown.classList.add("mb-2", "text-sm")
-  countdown.textContent = "Tempo: 20s"
+  countdown.textContent = "Tempo restante: 20s"
 
   const input = document.createElement("input")
   input.id = "answer-input"

@@ -200,7 +200,8 @@ io.on("connection", (socket) => {
         id: socket.id,
         name: player?.name,
         answer: currentQuestion.answer,
-        score: player?.score
+        score: player?.score,
+        time: QUESTION_TIME - timeLeft,
       });
 
       const winner = playerList.find(p => (p.score || 0) >= MAX_SCORE);
