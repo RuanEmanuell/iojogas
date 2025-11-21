@@ -26,6 +26,7 @@ socket.on("disconnect", () => {
 //  ATUALIZAÇÃO DA LISTA DE PLAYERS
 // ==========================================================
 socket.on("playerListUpdate", (playerList: Player[]) => {
+  playerList = playerList.sort((a, b) => (b.score || 0) - (a.score || 0));
   const list = document.querySelector(".playerList") as HTMLElement
   list.replaceChildren()
 

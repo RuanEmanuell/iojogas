@@ -33,6 +33,7 @@ let currentQuestion: Question | null = null;
 let answered = false;
 let timeLeft = QUESTION_TIME;
 let questionTimer: NodeJS.Timeout | null = null;
+let usedQuestions: Set<number> = new Set();
 
 // trava para evitar duas perguntas simultâneas
 let isChangingQuestion = false;
@@ -74,7 +75,14 @@ function changeQuestion() {
   timeLeft = QUESTION_TIME;
   answered = false;
 
-  currentQuestion = questionList[Math.floor(Math.random() * questionList.length)];
+  const availableQuestions = questionList.filter(q => !usedQuestions.has(q.id));
+
+  // Sorteia uma pergunta nova
+  currentQuestion = availableQuestions[Math.floor(Math.random() * availableQuestions.length)];
+
+  // Adiciona à blacklist
+  usedQuestions.add(currentQuestion.id);
+
   io.emit("changeQuestion", currentQuestion);
 
   // evitar chamada dupla
@@ -191,7 +199,7 @@ io.on("connection", (socket) => {
 
       const player = playerList.find(p => p.id === socket.id);
       if (player) {
-        player.score = (player.score || 0) + (Math.trunc((timeLeft / 2)) + 1);
+        player.score = (player.score || 0) + (timeLeft > 10 ? 10 : timeLeft);
       }
 
       io.emit("playerListUpdate", playerList);
