@@ -95,6 +95,11 @@ function resetGame() {
 function giveNewLeaderIfNeeded() {
   if (!playerList.some(p => p.leader) && playerList.length > 0) {
     playerList[0].leader = true;
+
+    if (gameStarted) {
+      io.emit("returnToLobby");
+      resetGame();
+    }
   }
 }
 

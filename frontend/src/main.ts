@@ -33,7 +33,8 @@ socket.on("playerListUpdate", (playerList: Player[]) => {
     list.appendChild(createPlayerElement(p))
   }
 
-  const leader = playerList.find(p => p.leader)
+  const leader = playerList.find(p => p.leader);
+  const hasMinPlayers = playerList.length >= 2;
 
   if (leader && leader.id === socket.id && !document.querySelector("#startButton")) {
     const btn = document.createElement("button")
@@ -43,10 +44,23 @@ socket.on("playerListUpdate", (playerList: Player[]) => {
       "py-4", "px-6", "font-bold", "cursor-pointer",
       "hover:bg-green-800", "transition-all"
     )
+
     btn.textContent = "Iniciar"
-    btn.addEventListener("click", startGame)
 
     document.querySelector("#app")?.appendChild(btn)
+  }
+
+  if (document.querySelector("#startButton")) {
+
+    document.querySelector("#startButton")?.addEventListener("click", () => startGame(hasMinPlayers));
+
+    console.log("Jogadores na sala:", playerList.length, " - Habilitar botão?", hasMinPlayers);
+
+    if (hasMinPlayers) {
+      document.querySelector("#startButton")?.classList.remove("opacity-50", "cursor-not-allowed");
+    } else {
+      document.querySelector("#startButton")?.classList.add("opacity-50", "cursor-not-allowed");
+    }
   }
 })
 
@@ -153,9 +167,11 @@ function createPlayerElement(player: Player): HTMLElement {
 // ==========================================================
 //  START GAME
 // ==========================================================
-function startGame() {
-  socket.emit("startGame")
-  document.querySelector("#startButton")?.remove()
+function startGame(hasMinPlayers: boolean) {
+  if (hasMinPlayers) {
+    socket.emit("startGame")
+    document.querySelector("#startButton")?.remove();
+  }
 }
 
 // ==========================================================
@@ -172,8 +188,6 @@ function renderQuestion(imageUrl: string, questionId?: number, category?: string
 
   const subtitle = document.createElement("div")
   subtitle.classList.add("text-lg", "font-bold", "mb-3");
-
-  console.log("Categoria da pergunta:", category);
 
   subtitle.textContent = CATEGORIES[category ?? ""] || "O que é essa imagem?"
 
