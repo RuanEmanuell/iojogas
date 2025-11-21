@@ -11,9 +11,18 @@ function createPlayerElement(player: Player): HTMLElement {
   const fragment = template.content.cloneNode(true) as DocumentFragment;
 
   const el = fragment.querySelector(".player-item") as HTMLElement;
+
+  if (socket.id === player.id) {
+    el.classList.add("bg-green-600");
+  }
+
   const nameSpan = el.querySelector(".player-name") as HTMLElement;
 
   nameSpan.textContent = player.name;
+
+  if (player.leader) {
+    nameSpan.textContent += " 👑";
+  }
 
   return el;
 }
@@ -43,7 +52,7 @@ socket.on("playerListUpdate", (playerList: Player[]) => {
     const startButton = document.createElement('button');
     startButton.id = "startButton"
     startButton.classList.add("bg-green-600", "rounded-lg", "text-2xl", "py-4", "px-6", "font-bold", "cursor-pointer", "hover:bg-green-800", "transition-all");
-    startButton.innerHTML = "Iniciar";
+    startButton.textContent = "Iniciar";
 
     document.querySelector("#app")?.appendChild(startButton);
   }
