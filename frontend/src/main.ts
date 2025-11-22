@@ -207,8 +207,13 @@ function renderQuestion(imageUrl: string, questionId?: number, category?: string
 
   const input = document.createElement("input")
   input.id = "answer-input"
-  input.placeholder = "Digite sua resposta..."
-  input.classList.add("p-2", "rounded", "w-64", "text-black", "bg-white")
+  input.placeholder = "Digite sua resposta...";
+  input.classList.add("p-2", "rounded", "w-64", "text-black", "bg-white");
+  input.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    sendAnswer()
+  }
+  })
 
   const btn = document.createElement("button")
   btn.id = "send-answer-btn"
