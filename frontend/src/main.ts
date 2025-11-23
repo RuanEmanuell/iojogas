@@ -1,7 +1,7 @@
 import './style.css'
 import { io } from "socket.io-client"
 import { Player } from './types/Player'
-import { CATEGORIES } from './utils/category'
+import { CATEGORIES } from './utils/categories'
 
 const apiUrl = import.meta.env.VITE_API_URL
 

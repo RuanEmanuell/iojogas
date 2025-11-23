@@ -3,7 +3,7 @@ export const CATEGORIES: Record<string, string> = {
   pokemon: "Quem é esse Pokémon?",
   movies: "Qual é esse filme?",
   characters: "Quem é esse personagem?",
-  music: "Quem é esse músico ou banda?",
+  music: "Quem é esse cantante ou banda?",
   tvShows: "Qual é essa série de TV?",
   games: "Qual é esse jogo?",
   cartoons: "Qual é esse desenho animado?",
