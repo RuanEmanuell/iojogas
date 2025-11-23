@@ -1,12 +1,12 @@
 export class Question {
     id: number;
     category?: string;
-    answer: string;
+    answers: string[];
     imageUrl?: string;
 
-    constructor(id: number, answer: string, category?: string, imageUrl?: string) {
+    constructor(id: number, answers: string[], category?: string, imageUrl?: string) {
         this.id = id;
-        this.answer = answer;
+        this.answers = answers;
         this.category = category;
         this.imageUrl = imageUrl;
     }

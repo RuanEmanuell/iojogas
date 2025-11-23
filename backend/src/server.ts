@@ -113,7 +113,7 @@ function changeQuestion() {
         questionTimer = null;
 
         io.emit("timerFinished", {
-          correctAnswer: currentQuestion?.answer
+          correctAnswer: currentQuestion?.answers[0]
         });
 
         isChangingQuestion = false;
@@ -184,12 +184,16 @@ io.on("connection", (socket) => {
     }
 
     const normalized = (text || "").trim().toLowerCase();
-    const correct = currentQuestion.answer.trim().toLowerCase();
 
     socket.emit("answerReceived", { text, accepted: true });
 
+    // VERIFICA SE BATE COM ALGUMA DAS RESPOSTAS POSSÍVEIS
+    const isCorrect = currentQuestion.answers
+      .map(a => a.trim().toLowerCase())
+      .includes(normalized);
+
     // ACERTOU
-    if (normalized === correct) {
+    if (isCorrect) {
       answered = true;
 
       if (questionTimer) {
@@ -207,7 +211,8 @@ io.on("connection", (socket) => {
       io.emit("correctAnswer", {
         id: socket.id,
         name: player?.name,
-        answer: currentQuestion.answer,
+        // Retorna a primeira resposta da lista só pra exibir
+        answer: currentQuestion.answers[0],
         score: player?.score,
         time: QUESTION_TIME - timeLeft,
       });
@@ -240,6 +245,7 @@ io.on("connection", (socket) => {
     }
   });
 });
+
 
 /* -----------------------------------------
    EXPRESS
