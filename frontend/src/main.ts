@@ -110,7 +110,7 @@ socket.on("gameFinished", (playerList: Player[]) => {
 
 // Resposta correta/errada
 socket.on("correctAnswer", (info) => {
-  showMessage(`${info.name} acertou: ${info.answer} em ${info.time}s`)
+  showMessage(`${info.name} acertou em ${info.time}s: ${info.answer}`)
   disableAnswerInput(true)
 })
 

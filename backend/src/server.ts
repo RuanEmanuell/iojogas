@@ -5,6 +5,7 @@ import dotenv from "dotenv";
 import { Player } from './types/Player';
 import { Question } from './types/Question';
 import { questionList } from './utils/questions';
+import { normalizeText } from './utils/normalizeText';
 
 dotenv.config();
 
@@ -183,13 +184,15 @@ io.on("connection", (socket) => {
       return;
     }
 
-    const normalized = (text || "").trim().toLowerCase();
+    // NORMALIZA A RESPOSTA DO PLAYER
+    const normalized = normalizeText(text);
 
+    // ENVIA EVENTO
     socket.emit("answerReceived", { text, accepted: true });
 
     // VERIFICA SE BATE COM ALGUMA DAS RESPOSTAS POSSÍVEIS
     const isCorrect = currentQuestion.answers
-      .map(a => a.trim().toLowerCase())
+      .map(a => normalizeText(a))
       .includes(normalized);
 
     // ACERTOU
