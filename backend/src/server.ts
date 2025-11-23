@@ -158,6 +158,14 @@ io.on("connection", (socket) => {
     io.emit("playerListUpdate", playerList);
   });
 
+  socket.emit("initialState", {
+    gameStarted,
+    currentQuestion,
+    timeLeft,
+    playerList
+  });
+
+
   /* COMEÇAR JOGO (só o líder) */
   socket.on("startGame", () => {
     const pl = playerList.find(p => p.id === socket.id);

@@ -141,6 +141,37 @@ socket.on("returnToLobby", () => {
   document.querySelector("#app")?.classList.remove("hidden");
 });
 
+socket.on("initialState", (state) => {
+  socket.emit("playerListUpdate", state.playerList)
+
+  if (!state.gameStarted) {
+    // Ainda está no lobby
+    document.querySelector("#game")?.classList.add("hidden")
+    document.querySelector("#app")?.classList.remove("hidden")
+    return
+  }
+
+  // Já tem jogo rolando → mostrar tela de jogo imediatamente
+  document.querySelector("#app")?.classList.add("hidden")
+  document.querySelector("#game")?.classList.remove("hidden")
+
+  // Renderiza a pergunta atual
+  if (state.currentQuestion) {
+    const imagePath = `/images/${state.currentQuestion.imageUrl ?? ""}`
+    renderQuestion(
+      imagePath,
+      state.currentQuestion.id,
+      state.currentQuestion.category
+    )
+  }
+
+  // Ajusta timer atual
+  const el = document.querySelector("#countdown")
+  if (el) el.textContent = `Tempo restante: ${state.timeLeft}s`
+
+  // Garante que o player possa responder
+  disableAnswerInput(false)
+})
 
 
 // ==========================================================
