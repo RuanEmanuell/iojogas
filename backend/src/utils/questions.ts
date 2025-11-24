@@ -14,7 +14,7 @@ export const questionList: Question[] = [
     { id: 11, category: "anime", answers: ["Bleach"], imageUrl: "bleach.jpg" },
     { id: 12, category: "anime", answers: ["Fairy Tail"], imageUrl: "fairy_tail.jpg" },
     { id: 13, category: "anime", answers: ["Cowboy Bebop"], imageUrl: "cowboy_bepop.jpg" },
-    { id: 14, category: "anime", answers: ["Neon Genesis Evangelion", "Evagelion"], imageUrl: "neon_genesis_evangelion.jpg" },
+    { id: 14, category: "anime", answers: ["Neon Genesis Evangelion", "Evangelion"], imageUrl: "neon_genesis_evangelion.jpg" },
     { id: 15, category: "anime", answers: ["JoJo's Bizarre Adventure", "Jojo"], imageUrl: "jojo.jpg" },
     { id: 16, category: "anime", answers: ["Hunter x Hunter"], imageUrl: "hunter_x_hunter.jpg" },
     { id: 17, category: "anime", answers: ["Black Clover"], imageUrl: "black_clover.jpg" },
