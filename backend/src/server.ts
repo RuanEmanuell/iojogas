@@ -24,8 +24,8 @@ const io = new Server(server, {
    ESTADO GLOBAL DO JOGO
 ----------------------------------------- */
 
-const QUESTION_TIME = 20;
-const MAX_SCORE = 100;
+let QUESTION_TIME = 20;
+let MAX_SCORE = 100;
 
 let playerList: Player[] = [];
 
@@ -85,6 +85,7 @@ function changeQuestion() {
   usedQuestions.add(currentQuestion.id);
 
   io.emit("changeQuestion", currentQuestion);
+  io.emit("timerUpdate", timeLeft);
 
   // evitar chamada dupla
   setTimeout(() => {
@@ -167,119 +168,122 @@ io.on("connection", (socket) => {
 
 
   /* COMEÇAR JOGO (só o líder) */
-  socket.on("startGame", () => {
-    const pl = playerList.find(p => p.id === socket.id);
-    if (!pl?.leader) return;
+  socket.on("startGame", ({ time, score }) => {
 
-    if (gameStarted) return;
+    if (!playerList.find(p => p.id === socket.id)?.leader) return;
 
+    QUESTION_TIME = time;
+    MAX_SCORE = score;
+
+    usedQuestions.clear();
     gameStarted = true;
-    io.emit("gameStarted");
+
+    io.emit("gameStarted", { time: QUESTION_TIME, score: MAX_SCORE });
 
     changeQuestion();
   });
 
   /* RESPONDER */
-socket.on("answer", (text: string) => {
+  socket.on("answer", (text: string) => {
 
-  if (!gameStarted || !currentQuestion) {
-    socket.emit("answerReceived", {
-      text,
-      accepted: false,
-      reason: "No active question"
-    });
-    return;
-  }
-
-  if (answered) {
-    socket.emit("answerReceived", {
-      text,
-      accepted: false,
-      reason: "Already answered"
-    });
-    return;
-  }
-
-  // NORMALIZA A RESPOSTA DO PLAYER
-  const normalized = normalizeText(text);
-  const player = playerList.find(p => p.id === socket.id);
-
-  // SEMPRE MANDA O MESMO PAYLOAD PARA TODOS
-  const answerPayload = {
-    text,
-    accepted: true,
-    playerName: player?.name
-  };
-
-  io.emit("answerReceived", answerPayload);
-
-  // VERIFICA SE ACERTOU
-  const isCorrect = currentQuestion.answers
-    .map(a => normalizeText(a))
-    .includes(normalized);
-
-  /* ==========================
-        RESPOSTA CORRETA
-     ========================== */
-  if (isCorrect) {
-    answered = true;
-
-    if (questionTimer) {
-      clearInterval(questionTimer);
-      questionTimer = null;
+    if (!gameStarted || !currentQuestion) {
+      socket.emit("answerReceived", {
+        text,
+        accepted: false,
+        reason: "No active question"
+      });
+      return;
     }
 
-    if (player) {
-      player.score = (player.score || 0) + (timeLeft > 10 ? 10 : timeLeft);
+    if (answered) {
+      socket.emit("answerReceived", {
+        text,
+        accepted: false,
+        reason: "Already answered"
+      });
+      return;
     }
 
-    io.emit("playerListUpdate", playerList);
+    // NORMALIZA A RESPOSTA DO PLAYER
+    const normalized = normalizeText(text);
+    const player = playerList.find(p => p.id === socket.id);
 
-    io.emit("correctAnswer", {
-      id: socket.id,
-      name: player?.name,
-      answer: currentQuestion.answers[0],
-      score: player?.score,
-      time: QUESTION_TIME - timeLeft,
-    });
+    // SEMPRE MANDA O MESMO PAYLOAD PARA TODOS
+    const answerPayload = {
+      text,
+      accepted: true,
+      playerName: player?.name
+    };
 
-    // CHECA VENCEDOR
-    const winner = playerList.find(p => (p.score || 0) >= MAX_SCORE);
-    if (winner) {
-      io.emit("showWinner", { winner, playerList });
+    io.emit("answerReceived", answerPayload);
 
+    // VERIFICA SE ACERTOU
+    const isCorrect = currentQuestion.answers
+      .map(a => normalizeText(a))
+      .includes(normalized);
+
+    /* ==========================
+          RESPOSTA CORRETA
+       ========================== */
+    if (isCorrect) {
+      answered = true;
+
+      if (questionTimer) {
+        clearInterval(questionTimer);
+        questionTimer = null;
+      }
+
+      if (player) {
+        player.score = (player.score || 0) + (timeLeft > 10 ? 10 : timeLeft);
+      }
+
+      io.emit("playerListUpdate", playerList);
+
+      io.emit("correctAnswer", {
+        id: socket.id,
+        name: player?.name,
+        answer: currentQuestion.answers[0],
+        score: player?.score,
+        time: QUESTION_TIME - timeLeft,
+      });
+
+      // CHECA VENCEDOR
+      const winner = playerList.find(p => (p.score || 0) >= MAX_SCORE);
+      if (winner) {
+        io.emit("showWinner", { winner, playerList });
+
+        setTimeout(() => {
+          io.emit("returnToLobby");
+          resetGame();
+        }, 4000);
+
+        return;
+      }
+
+      // Próxima pergunta
       setTimeout(() => {
-        io.emit("returnToLobby");
-        resetGame();
-      }, 4000);
+        currentQuestion = null;
+        answered = false;
+        changeQuestion();
+      }, 3000);
 
       return;
     }
 
-    // Próxima pergunta
-    setTimeout(() => {
-      currentQuestion = null;
-      answered = false;
-      changeQuestion();
-    }, 3000);
+    /* ==========================
+          RESPOSTA ERRADA
+       ========================== */
 
-    return;
-  }
+    io.emit("wrongAnswer", { text });
 
-  /* ==========================
-        RESPOSTA ERRADA
-     ========================== */
+    io.emit("someoneTried", {
+      id: socket.id,
+      name: player?.name,
+      text
+    });
 
-  io.emit("wrongAnswer", { text });
-
-  io.emit("someoneTried", {
-    id: socket.id,
-    name: player?.name,
-    text
+    socket.emit("unlockAnswer");
   });
-
-  socket.emit("unlockAnswer");
-});
 });
 
 

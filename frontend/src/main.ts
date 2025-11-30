@@ -37,7 +37,47 @@ socket.on("playerListUpdate", (playerList: Player[]) => {
   const leader = playerList.find(p => p.leader);
   const hasMinPlayers = playerList.length >= 2;
 
+  if (!leader) {
+      document.querySelector("#waiting-game")?.classList.remove("hidden");
+  }
+
   if (leader && leader.id === socket.id && !document.querySelector("#startButton")) {
+
+    document.querySelector("#waiting-game")?.classList.add("hidden");
+
+    const container = document.createElement("div")
+    container.classList.add("flex", "flex-col", "gap-4", "mb-4");
+
+    container.innerHTML = `
+
+    <div class="flex flex-col gap-1">
+      <label class="text-white font-semibold text-lg">Tempo por pergunta</label>
+      <select id="timeInput"
+        class="px-4 py-2 rounded bg-gray-900 text-white border border-gray-600 text-lg">
+        <option value="10">10 segundos</option>
+        <option value="15">15 segundos</option>
+        <option value="20" selected>20 segundos</option>
+        <option value="30">30 segundos</option>
+        <option value="45">45 segundos</option>
+      </select>
+    </div>
+
+    <div class="flex flex-col gap-1">
+      <label class="text-white font-semibold text-lg">Pontuação para vencer</label>
+      <select id="scoreInput"
+        class="px-4 py-2 rounded bg-gray-900 text-white border border-gray-600 text-lg">
+        <option value="30">30 pontos</option>
+        <option value="50">50 pontos</option>
+        <option value="75">75 pontos</option>
+        <option value="100" selected>100 pontos</option>
+        <option value="150">150 pontos</option>
+      </select>
+    </div>
+
+  `
+
+    document.querySelector("#app")?.appendChild(container)
+
     const btn = document.createElement("button")
     btn.id = "startButton"
     btn.classList.add(
@@ -45,11 +85,18 @@ socket.on("playerListUpdate", (playerList: Player[]) => {
       "py-4", "px-6", "font-bold", "cursor-pointer",
       "hover:bg-green-800", "transition-all"
     )
-
     btn.textContent = "Iniciar"
 
+    btn.onclick = () => {
+      const time = Number((document.querySelector("#timeInput") as HTMLSelectElement).value)
+      const score = Number((document.querySelector("#scoreInput") as HTMLSelectElement).value)
+
+      socket.emit("startGame", { time, score })
+    }
+
     document.querySelector("#app")?.appendChild(btn)
-  }
+  } 
+
 
   if (document.querySelector("#startButton")) {
 
@@ -185,7 +232,8 @@ socket.on("initialState", (state) => {
     renderQuestion(
       imagePath,
       state.currentQuestion.id,
-      state.currentQuestion.category
+      state.currentQuestion.category,
+      state.timeLeft
     )
   }
 
@@ -225,15 +273,15 @@ function createPlayerElement(player: Player): HTMLElement {
 // ==========================================================
 function startGame(hasMinPlayers: boolean) {
   if (hasMinPlayers) {
-    socket.emit("startGame")
     document.querySelector("#startButton")?.remove();
   }
 }
 
+
 // ==========================================================
 //  RENDERIZA A PERGUNTA
 // ==========================================================
-function renderQuestion(imageUrl: string, questionId?: number, category?: string) {
+function renderQuestion(imageUrl: string, questionId?: number, category?: string, timeLeft?: number) {
   const gameEl = document.querySelector("#game") as HTMLElement
   gameEl.innerHTML = ""
 
@@ -259,7 +307,7 @@ function renderQuestion(imageUrl: string, questionId?: number, category?: string
   const countdown = document.createElement("div")
   countdown.id = "countdown"
   countdown.classList.add("mb-2", "text-sm")
-  countdown.textContent = "Tempo restante: 20s"
+  countdown.textContent = `Tempo restante: ${timeLeft ?? "s"}s`
 
   const input = document.createElement("input")
   input.id = "answer-input"
