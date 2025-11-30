@@ -110,17 +110,41 @@ socket.on("gameFinished", (playerList: Player[]) => {
 
 // Resposta correta/errada
 socket.on("correctAnswer", (info) => {
-  showMessage(`${info.name} acertou em ${info.time}s: ${info.answer}`)
-  disableAnswerInput(true)
-})
+  showMessage("");
+  const ans = document.querySelector("#game-answer");
+  if (!ans) return;
 
-socket.on("wrongAnswer", (info) => {
-  showMessage(`Errou: ${info.text}`)
+  ans.classList.remove("bg-white", "text-black");
+  ans.classList.add("bg-green-500", "text-white");
+
+  const text = `${info.name} acertou em ${info.time}s: ${info.answer}`
+  ans.textContent = text;
+  disableAnswerInput(true);
 });
+
+socket.on("wrongAnswer", () => {
+  showMessage("");
+  const ans = document.querySelector("#game-answer");
+  if (!ans) return;
+
+  ans.classList.remove("bg-white", "text-black");
+  ans.classList.add("bg-red-600", "text-white");
+});
+
 
 socket.on("unlockAnswer", () => {
   disableAnswerInput(false)
 })
+
+socket.on("answerReceived", (info) => {
+  const old = document.querySelector("#game-answer");
+  if (old) old.remove();
+
+  const container = document.getElementById("game-container");
+
+  createAnswerPopup(`${info.playerName}: ${info.text}`, container!);
+});
+
 
 socket.on("showWinner", ({ winner }) => {
   const gameEl = document.querySelector("#game") as HTMLElement;
@@ -214,6 +238,7 @@ function renderQuestion(imageUrl: string, questionId?: number, category?: string
   gameEl.innerHTML = ""
 
   const container = document.createElement("div")
+  container.id = "game-container";
   container.classList.add("flex", "flex-col", "items-center")
 
   if (questionId !== undefined) container.dataset.questionId = String(questionId);
@@ -241,9 +266,9 @@ function renderQuestion(imageUrl: string, questionId?: number, category?: string
   input.placeholder = "Digite sua resposta...";
   input.classList.add("p-2", "rounded", "w-64", "text-black", "bg-white");
   input.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") {
-    sendAnswer()
-  }
+    if (e.key === "Enter") {
+      sendAnswer()
+    }
   })
 
   const btn = document.createElement("button")
@@ -258,9 +283,29 @@ function renderQuestion(imageUrl: string, questionId?: number, category?: string
 
   const msg = document.createElement("div")
   msg.id = "game-message"
-  msg.classList.add("text-sm", "text-gray-300", "mt-3")
+  msg.classList.add("text-sm", "text-gray-300", "mt-3");
 
-  container.append(img, countdown, row, msg)
+  const answer = document.createElement("div");
+  answer.id = "game-answer";
+
+  answer.className = `
+    hidden
+     mt-3 px-5 py-2
+    text-black font-bold text-lg
+    rounded-xl shadow-md
+    bg-white
+    transition-all duration-200
+    opacity-0 scale-95
+  `;
+
+  container.appendChild(answer);
+
+  requestAnimationFrame(() => {
+    answer.classList.remove("opacity-0", "scale-95");
+    answer.classList.add("opacity-100", "scale-100");
+  });
+
+  container.append(img, countdown, row, msg, answer);
   gameEl.append(container)
 
   // foca no input e garante desbloqueio
@@ -292,6 +337,30 @@ function showMessage(text: string) {
   const msg = document.querySelector("#game-message") as HTMLElement
   if (msg) msg.textContent = text
 }
+
+function createAnswerPopup(text: string, container: HTMLElement) {
+  const answer = document.createElement("div");
+  answer.id = "game-answer";
+
+  answer.className = `
+    inline-block mt-3 px-5 py-2 min-w-[120px]
+    text-black font-bold text-lg text-center
+    rounded-xl shadow-md
+    bg-white
+    transition-all duration-200
+    opacity-0
+  `;
+
+  answer.textContent = text;
+  container.appendChild(answer);
+
+  requestAnimationFrame(() => {
+    answer.classList.remove("opacity-0");
+    answer.classList.add("opacity-100");
+  });
+}
+
+
 
 function disableAnswerInput(disabled: boolean) {
   const input = document.querySelector<HTMLInputElement>("#answer-input")
