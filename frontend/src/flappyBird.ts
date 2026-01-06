@@ -139,7 +139,7 @@ export function initFlappyBird(socket: Socket, myId: string, initialData: { bird
     canPlayFlap = false;
 
     flapSound.currentTime = 0;
-    flapSound.play().catch(e => console.log(e));
+    //flapSound.play().catch(e => console.log(e));
 
     setTimeout(() => {
       canPlayFlap = true;

@@ -247,7 +247,7 @@ function updateFlappyBird() {
   });
 
   // Update pipe
-  flappyPipe.x -= 4;
+  flappyPipe.x -= 2;
   if (flappyPipe.x + flappyPipe.width < 0) {
     flappyPipe.x = 360;
     flappyPipe.topHeight = randomPipeHeight();
