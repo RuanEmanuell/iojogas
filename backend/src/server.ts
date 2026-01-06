@@ -207,7 +207,7 @@ function startFlappyBirdGame() {
   // Iniciar update periódico LEVE (apenas para sincronizar posições, não física)
   flappyTimer = setInterval(() => {
     broadcastPositions();
-  }, 25); // A cada 25ms (não 60 FPS!)
+  }, 5); // A cada 5ms (não 60 FPS!)
 }
 
 // Broadcast de posições para sincronização leve
