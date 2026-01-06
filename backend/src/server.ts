@@ -468,7 +468,7 @@ io.on("connection", (socket) => {
 
     const bird = flappyBirds.find(b => b.id === socket.id);
     if (bird && bird.alive) {
-      bird.vy = -7;
+      bird.vy = -6;
     }
   });
 });
