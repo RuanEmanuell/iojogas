@@ -204,70 +204,16 @@ function startFlappyBirdGame() {
 
   io.emit("flappyBirdStarted", { birds: flappyBirds, pipe: flappyPipe });
 
-  // Game loop
+  // Iniciar update periódico LEVE (apenas para sincronizar posições, não física)
   flappyTimer = setInterval(() => {
-    updateFlappyBird();
-  }, 1000 / 60); // 60 FPS
+    broadcastPositions();
+  }, 500); // A cada 500ms (não 60 FPS!)
 }
 
-function updateFlappyBird() {
+// Broadcast de posições para sincronização leve
+function broadcastPositions() {
   if (!flappyBirdGameActive) return;
 
-  const groundY = 640 - 120;
-
-  // Update birds
-  flappyBirds.forEach(bird => {
-    if (!bird.alive) return;
-
-    bird.vy += 0.2;
-    bird.y += bird.vy;
-
-    // Check collision with ground
-    if (bird.y + 30 >= groundY) {
-      bird.alive = false;
-      io.emit("flappyBirdDeath", { birdId: bird.id });
-    }
-
-    // Check collision with pipes
-    const birdRight = bird.x + 40;
-    const birdBottom = bird.y + 30;
-
-    if (
-      birdRight > flappyPipe.x &&
-      bird.x < flappyPipe.x + flappyPipe.width
-    ) {
-      if (
-        bird.y < flappyPipe.topHeight ||
-        birdBottom > flappyPipe.topHeight + flappyPipe.gap
-      ) {
-        bird.alive = false;
-        io.emit("flappyBirdDeath", { birdId: bird.id });
-      }
-    }
-  });
-
-  // Update pipe
-  flappyPipe.x -= 2;
-  if (flappyPipe.x + flappyPipe.width < 0) {
-    flappyPipe.x = 360;
-    flappyPipe.topHeight = randomPipeHeight();
-
-    // Increment score for alive birds
-    flappyBirds.forEach(bird => {
-      if (bird.alive) {
-        bird.score++;
-      }
-    });
-  }
-
-  // Check if game is over
-  const aliveBirds = flappyBirds.filter(b => b.alive);
-  if (aliveBirds.length === 0) {
-    stopFlappyBirdGame();
-    return;
-  }
-
-  // Broadcast state
   io.emit("flappyBirdUpdate", {
     birds: flappyBirds,
     pipe: flappyPipe
@@ -468,7 +414,40 @@ io.on("connection", (socket) => {
 
     const bird = flappyBirds.find(b => b.id === socket.id);
     if (bird && bird.alive) {
-      bird.vy = -6;
+      bird.vy = -10; // Atualizar no servidor também
+    }
+  });
+
+  // Cliente reporta sua posição periodicamente
+  socket.on("flappyBirdPosition", (data: { x: number, y: number, vy: number, score: number }) => {
+    if (!flappyBirdGameActive) return;
+
+    const bird = flappyBirds.find(b => b.id === socket.id);
+    if (bird && bird.alive) {
+      bird.x = data.x;
+      bird.y = data.y;
+      bird.vy = data.vy;
+      bird.score = data.score;
+    }
+  });
+
+  // Cliente reporta sua morte
+  socket.on("flappyBirdDeath", (data: { score: number }) => {
+    if (!flappyBirdGameActive) return;
+
+    const bird = flappyBirds.find(b => b.id === socket.id);
+    if (bird && bird.alive) {
+      bird.alive = false;
+      bird.score = data.score;
+      
+      // Notificar todos
+      io.emit("flappyBirdDeath", { birdId: bird.id });
+
+      // Verificar se o jogo acabou
+      const aliveBirds = flappyBirds.filter(b => b.alive);
+      if (aliveBirds.length === 0) {
+        stopFlappyBirdGame();
+      }
     }
   });
 });

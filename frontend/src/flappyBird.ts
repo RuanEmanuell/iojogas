@@ -21,14 +21,16 @@ interface Pipe {
 let globalGameState = {
   birds: [] as Bird[],
   pipe: { x: 360, topHeight: 150, gap: 160, width: 70 } as Pipe,
+  floorX: 0,
   gameOver: false,
   isRunning: false,
-  loopActive: true // Loop continua mesmo após game over
+  loopActive: true,
+  myId: "" as string
 };
 
 let socketsRegistered = false;
 
-function setupSocketListeners(socket: Socket) {
+function setupSocketListeners(socket: Socket, myId: string) {
   if (socketsRegistered) return;
   socketsRegistered = true;
 
@@ -38,11 +40,24 @@ function setupSocketListeners(socket: Socket) {
     globalGameState.gameOver = false;
     globalGameState.isRunning = true;
     globalGameState.loopActive = true;
+    globalGameState.floorX = 0;
   });
 
+  // Receber updates periódicos dos OUTROS jogadores (não precisa ser todo frame)
   socket.on("flappyBirdUpdate", (data: { birds: Bird[], pipe: Pipe }) => {
-    globalGameState.birds = data.birds;
-    globalGameState.pipe = data.pipe;
+    // Atualizar apenas outros jogadores (não eu mesmo)
+    data.birds.forEach(serverBird => {
+      if (serverBird.id !== myId) {
+        const localBird = globalGameState.birds.find(b => b.id === serverBird.id);
+        if (localBird) {
+          localBird.x = serverBird.x;
+          localBird.y = serverBird.y;
+          localBird.vy = serverBird.vy;
+          localBird.alive = serverBird.alive;
+          localBird.score = serverBird.score;
+        }
+      }
+    });
   });
 
   socket.on("flappyBirdDeath", (data: { birdId: string }) => {
@@ -55,14 +70,17 @@ function setupSocketListeners(socket: Socket) {
   socket.on("flappyBirdGameOver", (data: { winner: Bird, birds: Bird[] }) => {
     globalGameState.gameOver = true;
     globalGameState.birds = data.birds;
-    globalGameState.isRunning = false; // Para a física
-    globalGameState.loopActive = true; // Mas o desenho continua
+    globalGameState.isRunning = false;
+    globalGameState.loopActive = true;
   });
 }
 
 export function initFlappyBird(socket: Socket, myId: string, initialData: { birds: Bird[], pipe: Pipe }) {
+  // Guardar myId no estado global
+  globalGameState.myId = myId;
+  
   // Setup socket listeners (apenas uma vez)
-  setupSocketListeners(socket);
+  setupSocketListeners(socket, myId);
   
   // Atualizar estado global com dados iniciais
   globalGameState.birds = initialData.birds;
@@ -70,6 +88,7 @@ export function initFlappyBird(socket: Socket, myId: string, initialData: { bird
   globalGameState.gameOver = false;
   globalGameState.isRunning = true;
   globalGameState.loopActive = true;
+  globalGameState.floorX = 0;
   const dpr = window.devicePixelRatio || 1;
 
   const canvas = document.getElementById("canvas") as HTMLCanvasElement;
@@ -150,15 +169,82 @@ export function initFlappyBird(socket: Socket, myId: string, initialData: { bird
   const FLOOR_HEIGHT = 120;
   const groundY = logicalHeight - FLOOR_HEIGHT;
 
+  // Constantes de física
+  const GRAVITY = 0.6;
+  const JUMP_VELOCITY = -10;
+  const PIPE_SPEED = 3;
+
   /* ================= SOCKET EVENTS ================= */
   // Socket listeners já estão configurados globalmente
 
-  /* ================= UPDATE ================= */
+  /* ================= UPDATE (FÍSICA LOCAL) ================= */
   function update() {
+    if (!gameState.isRunning) return;
+
     // Update floor animation
-    let floorX = 0;
-    floorX -= 2;
-    if (floorX <= -logicalWidth) floorX = 0;
+    gameState.floorX -= 2;
+    if (gameState.floorX <= -logicalWidth) gameState.floorX = 0;
+
+    // Mover pipe
+    gameState.pipe.x -= PIPE_SPEED;
+
+    // Se pipe passou da tela, resetar
+    if (gameState.pipe.x + gameState.pipe.width < 0) {
+      gameState.pipe.x = logicalWidth;
+      // Gerar nova altura aleatória
+      gameState.pipe.topHeight = Math.floor(Math.random() * 200) + 100;
+    }
+
+    // Atualizar MEU pássaro localmente
+    const myBird = gameState.birds.find(b => b.id === myId);
+    if (myBird && myBird.alive) {
+      // Aplicar gravidade
+      myBird.vy += GRAVITY;
+      myBird.y += myBird.vy;
+
+      // Verificar colisões localmente
+      const hitGround = myBird.y + 30 >= groundY;
+      const hitCeiling = myBird.y <= 0;
+      
+      // Colisão com pipe
+      const birdRight = myBird.x + 40;
+      const birdBottom = myBird.y + 30;
+      const birdLeft = myBird.x;
+      const birdTop = myBird.y;
+
+      const pipeRight = gameState.pipe.x + gameState.pipe.width;
+      const pipeLeft = gameState.pipe.x;
+      const topPipeBottom = gameState.pipe.topHeight;
+      const bottomPipeTop = gameState.pipe.topHeight + gameState.pipe.gap;
+
+      const hitPipe = 
+        birdRight > pipeLeft && 
+        birdLeft < pipeRight && 
+        (birdTop < topPipeBottom || birdBottom > bottomPipeTop);
+
+      // Se morreu, avisar servidor
+      if (hitGround || hitCeiling || hitPipe) {
+        myBird.alive = false;
+        socket.emit("flappyBirdDeath", { score: myBird.score });
+      }
+
+      // Verificar se passou pelo pipe (pontuar)
+      if (myBird.alive && gameState.pipe.x + gameState.pipe.width < myBird.x && gameState.pipe.x + gameState.pipe.width >= myBird.x - PIPE_SPEED) {
+        myBird.score++;
+        scoreSound.currentTime = 0;
+        scoreSound.play().catch(e => console.log(e));
+      }
+
+      // Enviar minha posição pro servidor periodicamente (a cada ~10 frames = ~166ms)
+      if (Math.random() < 0.1) {
+        socket.emit("flappyBirdPosition", {
+          x: myBird.x,
+          y: myBird.y,
+          vy: myBird.vy,
+          score: myBird.score
+        });
+      }
+    }
   }
 
   /* ================= DRAW ================= */
@@ -313,16 +399,30 @@ export function initFlappyBird(socket: Socket, myId: string, initialData: { bird
   /* ================= INPUT ================= */
   const handleClick = () => {
     if (!gameState.gameOver && gameState.isRunning) {
-      socket.emit("flappyBirdFlap");
-      playFlap();
+      const myBird = gameState.birds.find(b => b.id === myId);
+      if (myBird && myBird.alive) {
+        // Aplicar pulo localmente (instantâneo!)
+        myBird.vy = JUMP_VELOCITY;
+        playFlap();
+        
+        // Avisar servidor (mas não esperar resposta)
+        socket.emit("flappyBirdFlap");
+      }
     }
   };
 
   const handleKeyDown = (e: KeyboardEvent) => {
     if (e.code === "Space" && !gameState.gameOver && gameState.isRunning) {
       e.preventDefault();
-      socket.emit("flappyBirdFlap");
-      playFlap();
+      const myBird = gameState.birds.find(b => b.id === myId);
+      if (myBird && myBird.alive) {
+        // Aplicar pulo localmente (instantâneo!)
+        myBird.vy = JUMP_VELOCITY;
+        playFlap();
+        
+        // Avisar servidor (mas não esperar resposta)
+        socket.emit("flappyBirdFlap");
+      }
     }
   };
 
