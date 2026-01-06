@@ -101,11 +101,6 @@ export function initFlappyBird(socket: Socket, myId: string) {
     }, flapCooldown);
   }
 
-  function playScore() {
-    scoreSound.currentTime = 0;
-    scoreSound.play();
-  }
-
   /* ================= WORLD ================= */
   const FLOOR_HEIGHT = 120;
   const groundY = logicalHeight - FLOOR_HEIGHT;
