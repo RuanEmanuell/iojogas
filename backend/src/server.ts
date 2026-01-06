@@ -219,7 +219,7 @@ function updateFlappyBird() {
   flappyBirds.forEach(bird => {
     if (!bird.alive) return;
 
-    bird.vy += 0.6;
+    bird.vy += 0.3;
     bird.y += bird.vy;
 
     // Check collision with ground
