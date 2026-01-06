@@ -45,16 +45,23 @@ function setupSocketListeners(socket: Socket, myId: string) {
 
   // Receber updates periódicos dos OUTROS jogadores (não precisa ser todo frame)
   socket.on("flappyBirdUpdate", (data: { birds: Bird[], pipe: Pipe }) => {
-    // Sempre sincronizar o pipe vindo do servidor (especialmente quando só 1 vivo envia)
-    if (data.pipe) {
+    // Identificar quem é o único vivo (se existir)
+    const alive = data.birds.filter(b => b.alive);
+    const soleAliveId = alive.length === 1 ? alive[0].id : null;
+
+    // Só aplicar pipe do servidor para espectadores / mortos.
+    // Evita travar o jogador vivo com lag de rede.
+    if (data.pipe && soleAliveId !== myId) {
       globalGameState.pipe = data.pipe;
     }
 
     data.birds.forEach(serverBird => {
       const localBird = globalGameState.birds.find(b => b.id === serverBird.id);
       if (localBird) {
-        // Atualizar apenas outros jogadores para evitar travar o pássaro local
-        if (serverBird.id !== myId) {
+        const isMe = serverBird.id === myId;
+        const shouldUpdate = !isMe; // nunca sobrescreve o pássaro local
+
+        if (shouldUpdate) {
           localBird.x = serverBird.x;
           localBird.y = serverBird.y;
           localBird.vy = serverBird.vy;
@@ -247,7 +254,9 @@ export function initFlappyBird(socket: Socket, myId: string, initialData: { bird
       const aliveBirds = gameState.birds.filter(b => b.alive);
       
       // Se há apenas 1 vivo, enviar a cada frame. Senão, enviar ~10% dos frames
-      const shouldSend = aliveBirds.length === 1 || Math.random() < 0.1;
+      // Para reduzir lag em deploy, limita envio quando único vivo a ~30 FPS
+      const isSoleAlive = aliveBirds.length === 1;
+      const shouldSend = (isSoleAlive ? Math.random() < 0.5 : Math.random() < 0.1);
       
       if (shouldSend) {
         // Se apenas 1 pássaro vivo, enviar também a posição do pipe
@@ -258,7 +267,7 @@ export function initFlappyBird(socket: Socket, myId: string, initialData: { bird
           score: myBird.score
         };
         
-        if (aliveBirds.length === 1) {
+        if (isSoleAlive) {
           payload.pipe = gameState.pipe;
         }
         
