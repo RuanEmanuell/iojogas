@@ -22,7 +22,8 @@ let globalGameState = {
   birds: [] as Bird[],
   pipe: { x: 360, topHeight: 150, gap: 160, width: 70 } as Pipe,
   gameOver: false,
-  isRunning: false
+  isRunning: false,
+  loopActive: true // Loop continua mesmo após game over
 };
 
 let socketsRegistered = false;
@@ -36,6 +37,7 @@ function setupSocketListeners(socket: Socket) {
     globalGameState.pipe = data.pipe;
     globalGameState.gameOver = false;
     globalGameState.isRunning = true;
+    globalGameState.loopActive = true;
   });
 
   socket.on("flappyBirdUpdate", (data: { birds: Bird[], pipe: Pipe }) => {
@@ -53,7 +55,8 @@ function setupSocketListeners(socket: Socket) {
   socket.on("flappyBirdGameOver", (data: { winner: Bird, birds: Bird[] }) => {
     globalGameState.gameOver = true;
     globalGameState.birds = data.birds;
-    globalGameState.isRunning = false;
+    globalGameState.isRunning = false; // Para a física
+    globalGameState.loopActive = true; // Mas o desenho continua
   });
 }
 
@@ -66,6 +69,7 @@ export function initFlappyBird(socket: Socket, myId: string, initialData: { bird
   globalGameState.pipe = initialData.pipe;
   globalGameState.gameOver = false;
   globalGameState.isRunning = true;
+  globalGameState.loopActive = true;
   const dpr = window.devicePixelRatio || 1;
 
   const canvas = document.getElementById("canvas") as HTMLCanvasElement;
@@ -283,7 +287,7 @@ export function initFlappyBird(socket: Socket, myId: string, initialData: { bird
   let animationFrameId: number;
 
   function loop(time: number) {
-    if (!gameState.isRunning) return;
+    if (!gameState.loopActive) return; // Parar apenas quando desmontar
 
     if (!lastTime) lastTime = time;
 
@@ -292,9 +296,12 @@ export function initFlappyBird(socket: Socket, myId: string, initialData: { bird
 
     accumulator += delta;
 
-    while (accumulator >= FRAME_TIME) {
-      update();
-      accumulator -= FRAME_TIME;
+    // Apenas atualizar física se o jogo ainda estiver rodando
+    if (gameState.isRunning) {
+      while (accumulator >= FRAME_TIME) {
+        update();
+        accumulator -= FRAME_TIME;
+      }
     }
 
     draw();
@@ -324,6 +331,7 @@ export function initFlappyBird(socket: Socket, myId: string, initialData: { bird
 
   // Retornar função de cleanup
   return () => {
+    gameState.loopActive = false; // Para o loop
     gameState.isRunning = false;
     cancelAnimationFrame(animationFrameId);
     document.removeEventListener("click", handleClick);
