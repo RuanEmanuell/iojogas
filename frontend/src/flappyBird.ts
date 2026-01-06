@@ -172,20 +172,24 @@ export function initFlappyBird(socket: Socket, myId: string, initialData: { bird
   const GRAVITY = 0.6;
   const JUMP_VELOCITY = -10;
   const PIPE_SPEED = 3;
+  const FLOOR_SPEED = 2;
 
   /* ================= SOCKET EVENTS ================= */
   // Socket listeners já estão configurados globalmente
 
   /* ================= UPDATE (FÍSICA LOCAL) ================= */
-  function update() {
+  function update(deltaTime: number) {
     if (!gameState.isRunning) return;
 
+    // Normalizar delta time para 60 FPS (deltaTime em ms, normalizar para segundos * 60)
+    const dt = (deltaTime / 1000) * 60;
+
     // Update floor animation
-    gameState.floorX -= 2;
+    gameState.floorX -= FLOOR_SPEED * dt;
     if (gameState.floorX <= -logicalWidth) gameState.floorX = 0;
 
     // Mover pipe
-    gameState.pipe.x -= PIPE_SPEED;
+    gameState.pipe.x -= PIPE_SPEED * dt;
 
     // Se pipe passou da tela, resetar
     if (gameState.pipe.x + gameState.pipe.width < 0) {
@@ -198,8 +202,8 @@ export function initFlappyBird(socket: Socket, myId: string, initialData: { bird
     const myBird = gameState.birds.find(b => b.id === myId);
     if (myBird && myBird.alive) {
       // Aplicar gravidade
-      myBird.vy += GRAVITY;
-      myBird.y += myBird.vy;
+      myBird.vy += GRAVITY * dt;
+      myBird.y += myBird.vy * dt;
 
       // Verificar colisões localmente
       const hitGround = myBird.y + 30 >= groundY;
@@ -228,7 +232,7 @@ export function initFlappyBird(socket: Socket, myId: string, initialData: { bird
       }
 
       // Verificar se passou pelo pipe (pontuar)
-      if (myBird.alive && gameState.pipe.x + gameState.pipe.width < myBird.x && gameState.pipe.x + gameState.pipe.width >= myBird.x - PIPE_SPEED) {
+      if (myBird.alive && gameState.pipe.x + gameState.pipe.width < myBird.x && gameState.pipe.x + gameState.pipe.width >= myBird.x - (PIPE_SPEED * dt)) {
         myBird.score++;
         scoreSound.currentTime = 0;
         scoreSound.play().catch(e => console.log(e));
@@ -370,6 +374,7 @@ export function initFlappyBird(socket: Socket, myId: string, initialData: { bird
 
   /* ================= LOOP ================= */
   let animationFrameId: number;
+  let lastFrameTime = 0;
 
   function loop(time: number) {
     if (!gameState.loopActive) return; // Parar apenas quando desmontar
@@ -377,17 +382,22 @@ export function initFlappyBird(socket: Socket, myId: string, initialData: { bird
     animationFrameId = requestAnimationFrame(loop);
 
     if (!lastTime) lastTime = time;
+    if (!lastFrameTime) lastFrameTime = time;
 
     const delta = time - lastTime;
     
     // Limitar a 60 FPS - só processar se passou tempo suficiente
     if (delta < FRAME_TIME) return;
     
+    // Calcular deltaTime real desde o último frame processado
+    const deltaTime = time - lastFrameTime;
+    lastFrameTime = time;
+    
     lastTime = time - (delta % FRAME_TIME); // Manter precisão
 
-    // Atualizar física se o jogo ainda estiver rodando
+    // Atualizar física se o jogo ainda estiver rodando (com deltaTime)
     if (gameState.isRunning) {
-      update();
+      update(deltaTime);
     }
 
     draw();
