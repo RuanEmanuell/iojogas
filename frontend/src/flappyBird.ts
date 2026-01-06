@@ -169,10 +169,10 @@ export function initFlappyBird(socket: Socket, myId: string, initialData: { bird
   const groundY = logicalHeight - FLOOR_HEIGHT;
 
   // Constantes de física
-  const GRAVITY = 0.6;
-  const JUMP_VELOCITY = -10;
-  const PIPE_SPEED = 3;
-  const FLOOR_SPEED = 2;
+  const GRAVITY = 0.5;
+  const JUMP_VELOCITY = -9;
+  const PIPE_SPEED = 2.5;
+  const FLOOR_SPEED = 1.5;
 
   /* ================= SOCKET EVENTS ================= */
   // Socket listeners já estão configurados globalmente
