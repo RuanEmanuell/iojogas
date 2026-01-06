@@ -117,7 +117,6 @@ export function initFlappyBird(socket: Socket, myId: string, initialData: { bird
   const FRAME_TIME = 1000 / TARGET_FPS;
 
   let lastTime = 0;
-  let accumulator = 0;
 
   /* ================= STATE FROM SERVER ================= */
   // Usar referência ao estado global
@@ -375,23 +374,23 @@ export function initFlappyBird(socket: Socket, myId: string, initialData: { bird
   function loop(time: number) {
     if (!gameState.loopActive) return; // Parar apenas quando desmontar
 
+    animationFrameId = requestAnimationFrame(loop);
+
     if (!lastTime) lastTime = time;
 
     const delta = time - lastTime;
-    lastTime = time;
+    
+    // Limitar a 60 FPS - só processar se passou tempo suficiente
+    if (delta < FRAME_TIME) return;
+    
+    lastTime = time - (delta % FRAME_TIME); // Manter precisão
 
-    accumulator += delta;
-
-    // Apenas atualizar física se o jogo ainda estiver rodando
+    // Atualizar física se o jogo ainda estiver rodando
     if (gameState.isRunning) {
-      while (accumulator >= FRAME_TIME) {
-        update();
-        accumulator -= FRAME_TIME;
-      }
+      update();
     }
 
     draw();
-    animationFrameId = requestAnimationFrame(loop);
   }
 
   animationFrameId = requestAnimationFrame(loop);
