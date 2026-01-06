@@ -2,10 +2,14 @@ import './style.css'
 import { io } from "socket.io-client"
 import { Player } from './types/Player'
 import { CATEGORIES } from './utils/categories'
+import { initFlappyBird } from './flappyBird'
 
 const apiUrl = import.meta.env.VITE_API_URL
 
 const socket = io(apiUrl)
+
+let currentGameMode: 'quiz' | 'flappybird' | null = null
+let flappyBirdCleanup: (() => void) | null | undefined = null
 
 // ==========================================================
 //  CONEXÃO
@@ -45,7 +49,41 @@ socket.on("playerListUpdate", (playerList: Player[]) => {
 
     document.querySelector("#waiting-game")?.classList.add("hidden");
 
+    // Seleção de modo de jogo
+    const gameModeContainer = document.createElement("div")
+    gameModeContainer.id = "game-mode-container"
+    gameModeContainer.classList.add("flex", "flex-col", "gap-4", "mb-6", "items-center")
+    gameModeContainer.innerHTML = `
+      <h2 class="text-2xl font-bold text-white">Escolha o Jogo</h2>
+      <div class="flex gap-4">
+        <button id="select-quiz" class="bg-blue-600 hover:bg-blue-800 px-6 py-3 rounded-lg font-bold transition-all">
+          Quiz
+        </button>
+        <button id="select-flappybird" class="bg-purple-600 hover:bg-purple-800 px-6 py-3 rounded-lg font-bold transition-all">
+          Flappy Bird
+        </button>
+      </div>
+    `
+    document.querySelector("#app")?.appendChild(gameModeContainer)
+
+    document.querySelector("#select-quiz")?.addEventListener("click", () => {
+      currentGameMode = 'quiz'
+      showQuizConfig()
+    })
+
+    document.querySelector("#select-flappybird")?.addEventListener("click", () => {
+      currentGameMode = 'flappybird'
+      startFlappyBird()
+    })
+
+    return
+  }
+
+  function showQuizConfig() {
+    document.querySelector("#game-mode-container")?.remove()
+
     const container = document.createElement("div")
+    container.id = "quiz-config-container"
     container.classList.add("flex", "flex-col", "gap-4", "mb-4");
 
     container.innerHTML = `
@@ -416,4 +454,19 @@ function disableAnswerInput(disabled: boolean) {
 
   if (input) input.disabled = disabled
   if (btn) btn.disabled = disabled
+}
+
+// ==========================================================
+//  FLAPPY BIRD
+// ==========================================================
+function startFlappyBird() {
+  // Remover a seleção de modo de jogo
+  document.querySelector("#game-mode-container")?.remove()
+
+  // Esconder o lobby e mostrar o jogo Flappy Bird
+  document.querySelector("#app")?.classList.add("hidden")
+  document.querySelector("#flappy-bird-game")?.classList.remove("hidden")
+
+  // Iniciar o jogo
+  flappyBirdCleanup = initFlappyBird()
 }
