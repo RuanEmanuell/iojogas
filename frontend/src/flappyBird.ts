@@ -45,11 +45,19 @@ function setupSocketListeners(socket: Socket, myId: string) {
 
   // Receber updates periódicos dos OUTROS jogadores (não precisa ser todo frame)
   socket.on("flappyBirdUpdate", (data: { birds: Bird[], pipe: Pipe }) => {
-    // Atualizar apenas outros jogadores (não eu mesmo)
+    // Atualizar apenas outros jogadores normalmente
+    // Mas se há apenas 1 vivo, também atualizar o pássaro vivo para sincronizar movimento
+    const aliveBirds = data.birds.filter(b => b.alive);
+    const isOnlyOneBirdAlive = aliveBirds.length === 1;
+    
     data.birds.forEach(serverBird => {
-      if (serverBird.id !== myId) {
-        const localBird = globalGameState.birds.find(b => b.id === serverBird.id);
-        if (localBird) {
+      const localBird = globalGameState.birds.find(b => b.id === serverBird.id);
+      if (localBird) {
+        // Se há apenas 1 vivo, atualizar inclusive o pássaro vivo para sincronizar
+        // Se há múltiplos vivos, atualizar apenas os outros (não eu mesmo)
+        const shouldUpdate = isOnlyOneBirdAlive || serverBird.id !== myId;
+        
+        if (shouldUpdate) {
           localBird.x = serverBird.x;
           localBird.y = serverBird.y;
           localBird.vy = serverBird.vy;
@@ -238,11 +246,13 @@ export function initFlappyBird(socket: Socket, myId: string, initialData: { bird
         scoreSound.play().catch(e => console.log(e));
       }
 
-      // Enviar minha posição pro servidor periodicamente (a cada ~10 frames = ~166ms)
-      if (Math.random() < 0.1) {
-        // Contar quantos pássaros estão vivos
-        const aliveBirds = gameState.birds.filter(b => b.alive);
-        
+      // Contar quantos pássaros estão vivos
+      const aliveBirds = gameState.birds.filter(b => b.alive);
+      
+      // Se há apenas 1 vivo, enviar a cada frame. Senão, enviar ~10% dos frames
+      const shouldSend = aliveBirds.length === 1 || Math.random() < 0.1;
+      
+      if (shouldSend) {
         // Se apenas 1 pássaro vivo, enviar também a posição do pipe
         const payload: any = {
           x: myBird.x,
