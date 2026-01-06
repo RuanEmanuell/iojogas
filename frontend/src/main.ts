@@ -15,6 +15,7 @@ let flappyBirdCleanup: (() => void) | null | undefined = null
 //  CONEXÃO
 // ==========================================================
 socket.on("connect", () => {
+  console.log(currentGameMode);
   const name =
     prompt("Digite seu nome") ||
     `Player${Math.floor(Math.random() * 9999)}`
