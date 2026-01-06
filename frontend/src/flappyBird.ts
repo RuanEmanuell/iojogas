@@ -45,11 +45,6 @@ function setupSocketListeners(socket: Socket, myId: string) {
 
   // Receber updates periódicos dos OUTROS jogadores (não precisa ser todo frame)
   socket.on("flappyBirdUpdate", (data: { birds: Bird[], pipe: Pipe }) => {
-    // Atualizar apenas outros jogadores normalmente
-    // Mas se há apenas 1 vivo, também atualizar o pássaro vivo para sincronizar movimento
-    const aliveBirds = data.birds.filter(b => b.alive);
-    const isOnlyOneBirdAlive = aliveBirds.length === 1;
-
     // Sempre sincronizar o pipe vindo do servidor (especialmente quando só 1 vivo envia)
     if (data.pipe) {
       globalGameState.pipe = data.pipe;
@@ -58,11 +53,8 @@ function setupSocketListeners(socket: Socket, myId: string) {
     data.birds.forEach(serverBird => {
       const localBird = globalGameState.birds.find(b => b.id === serverBird.id);
       if (localBird) {
-        // Se há apenas 1 vivo, atualizar inclusive o pássaro vivo para sincronizar
-        // Se há múltiplos vivos, atualizar apenas os outros (não eu mesmo)
-        const shouldUpdate = isOnlyOneBirdAlive || serverBird.id !== myId;
-
-        if (shouldUpdate) {
+        // Atualizar apenas outros jogadores para evitar travar o pássaro local
+        if (serverBird.id !== myId) {
           localBird.x = serverBird.x;
           localBird.y = serverBird.y;
           localBird.vy = serverBird.vy;
