@@ -219,7 +219,7 @@ function updateFlappyBird() {
   flappyBirds.forEach(bird => {
     if (!bird.alive) return;
 
-    bird.vy += 0.3;
+    bird.vy += 0.2;
     bird.y += bird.vy;
 
     // Check collision with ground
@@ -468,7 +468,7 @@ io.on("connection", (socket) => {
 
     const bird = flappyBirds.find(b => b.id === socket.id);
     if (bird && bird.alive) {
-      bird.vy = -8;
+      bird.vy = -7;
     }
   });
 });
