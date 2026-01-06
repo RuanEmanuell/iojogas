@@ -40,6 +40,29 @@ let usedQuestions: Set<number> = new Set();
 let isChangingQuestion = false;
 
 /* -----------------------------------------
+   FLAPPY BIRD STATE
+----------------------------------------- */
+interface Bird {
+  id: string;
+  name: string;
+  x: number;
+  y: number;
+  vy: number;
+  alive: boolean;
+  score: number;
+}
+
+let flappyBirdGameActive = false;
+let flappyBirds: Bird[] = [];
+let flappyPipe = {
+  x: 360,
+  topHeight: 150,
+  gap: 160,
+  width: 70
+};
+let flappyTimer: NodeJS.Timeout | null = null;
+
+/* -----------------------------------------
    FUNÇÕES IMPORTANTES
 ----------------------------------------- */
 
@@ -47,6 +70,7 @@ function resetGame() {
   gameStarted = false;
   answered = false;
   currentQuestion = null;
+  flappyBirdGameActive = false;
 
   playerList.forEach(p => p.score = 0);
 
@@ -132,6 +156,133 @@ function changeQuestion() {
 }
 
 /* -----------------------------------------
+   FLAPPY BIRD FUNCTIONS
+----------------------------------------- */
+
+function randomPipeHeight() {
+  const groundY = 640 - 120;
+  const min = 80;
+  const max = groundY - 120 - min;
+  return Math.floor(Math.random() * (max - min) + min);
+}
+
+function startFlappyBirdGame() {
+  flappyBirdGameActive = true;
+  
+  // Criar pássaro para cada player
+  flappyBirds = playerList.map(p => ({
+    id: p.id,
+    name: p.name,
+    x: 80,
+    y: 150,
+    vy: 0,
+    alive: true,
+    score: 0
+  }));
+
+  // Reset pipe
+  flappyPipe = {
+    x: 360,
+    topHeight: randomPipeHeight(),
+    gap: 160,
+    width: 70
+  };
+
+  io.emit("flappyBirdStarted", { birds: flappyBirds, pipe: flappyPipe });
+
+  // Game loop
+  flappyTimer = setInterval(() => {
+    updateFlappyBird();
+  }, 1000 / 60); // 60 FPS
+}
+
+function updateFlappyBird() {
+  if (!flappyBirdGameActive) return;
+
+  const groundY = 640 - 120;
+
+  // Update birds
+  flappyBirds.forEach(bird => {
+    if (!bird.alive) return;
+
+    bird.vy += 0.4;
+    bird.y += bird.vy;
+
+    // Check collision with ground
+    if (bird.y + 30 >= groundY) {
+      bird.alive = false;
+      io.emit("flappyBirdDeath", { birdId: bird.id });
+    }
+
+    // Check collision with pipes
+    const birdRight = bird.x + 40;
+    const birdBottom = bird.y + 30;
+
+    if (
+      birdRight > flappyPipe.x &&
+      bird.x < flappyPipe.x + flappyPipe.width
+    ) {
+      if (
+        bird.y < flappyPipe.topHeight ||
+        birdBottom > flappyPipe.topHeight + flappyPipe.gap
+      ) {
+        bird.alive = false;
+        io.emit("flappyBirdDeath", { birdId: bird.id });
+      }
+    }
+  });
+
+  // Update pipe
+  flappyPipe.x -= 3;
+  if (flappyPipe.x + flappyPipe.width < 0) {
+    flappyPipe.x = 360;
+    flappyPipe.topHeight = randomPipeHeight();
+
+    // Increment score for alive birds
+    flappyBirds.forEach(bird => {
+      if (bird.alive) {
+        bird.score++;
+      }
+    });
+  }
+
+  // Check if game is over
+  const aliveBirds = flappyBirds.filter(b => b.alive);
+  if (aliveBirds.length === 0) {
+    stopFlappyBirdGame();
+    return;
+  }
+
+  // Broadcast state
+  io.emit("flappyBirdUpdate", {
+    birds: flappyBirds,
+    pipe: flappyPipe
+  });
+}
+
+function stopFlappyBirdGame() {
+  flappyBirdGameActive = false;
+  if (flappyTimer) {
+    clearInterval(flappyTimer);
+    flappyTimer = null;
+  }
+
+  // Find winner
+  const winner = flappyBirds.reduce((max, bird) => 
+    bird.score > max.score ? bird : max
+  , flappyBirds[0]);
+
+  io.emit("flappyBirdGameOver", { 
+    winner,
+    birds: flappyBirds 
+  });
+
+  setTimeout(() => {
+    io.emit("returnToLobby");
+  }, 5000);
+}
+
+/* -----------------------------------------
    SOCKET.IO
 ----------------------------------------- */
 
@@ -164,6 +315,11 @@ io.on("connection", (socket) => {
     currentQuestion,
     timeLeft,
     playerList
+  });
+
+  /* FORCE PLAYER LIST UPDATE */
+  socket.on("requestPlayerListUpdate", () => {
+    io.emit("playerListUpdate", playerList);
   });
 
 
@@ -283,6 +439,22 @@ io.on("connection", (socket) => {
     });
 
     socket.emit("unlockAnswer");
+  });
+
+  /* FLAPPY BIRD */
+  socket.on("startFlappyBird", () => {
+    if (!playerList.find(p => p.id === socket.id)?.leader) return;
+    
+    startFlappyBirdGame();
+  });
+
+  socket.on("flappyBirdFlap", () => {
+    if (!flappyBirdGameActive) return;
+
+    const bird = flappyBirds.find(b => b.id === socket.id);
+    if (bird && bird.alive) {
+      bird.vy = -8;
+    }
   });
 });
 

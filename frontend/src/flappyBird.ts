@@ -1,4 +1,23 @@
-export function initFlappyBird() {
+import { Socket } from "socket.io-client";
+
+interface Bird {
+  id: string;
+  name: string;
+  x: number;
+  y: number;
+  vy: number;
+  alive: boolean;
+  score: number;
+}
+
+interface Pipe {
+  x: number;
+  topHeight: number;
+  gap: number;
+  width: number;
+}
+
+export function initFlappyBird(socket: Socket, myId: string) {
   const dpr = window.devicePixelRatio || 1;
 
   const canvas = document.getElementById("canvas") as HTMLCanvasElement;
@@ -29,22 +48,39 @@ export function initFlappyBird() {
   let lastTime = 0;
   let accumulator = 0;
 
+  /* ================= STATE FROM SERVER ================= */
+  let birds: Bird[] = [];
+  let pipe: Pipe = {
+    x: 360,
+    topHeight: 150,
+    gap: 160,
+    width: 70
+  };
+  let floorX = 0;
+  let gameOver = false;
+
   /* ================= IMAGENS ================= */
   const birdImg = new Image();
-  birdImg.src = "/public/bird.png";
+  birdImg.src = "/images/bird.png";
 
   const pipeImg = new Image();
-  pipeImg.src = "/public/pipe.png";
+  pipeImg.src = "/images/pipe.png";
 
   const floorImg = new Image();
-  floorImg.src = "/public/floor.png";
+  floorImg.src = "/images/floor.png";
 
   const backgroundImg = new Image();
-  backgroundImg.src = "/public/background.png";
+  backgroundImg.src = "/images/background.png";
+
+  // Fallback colors se as imagens não carregarem
+  const birdColors = [
+    '#FFD700', '#FF6347', '#4169E1', '#32CD32', 
+    '#FF69B4', '#FF8C00', '#9370DB', '#00CED1'
+  ];
 
   /* ================= SONS ================= */
-  const flapSound = new Audio("/public/sounds/flap.mp3");
-  const scoreSound = new Audio("/public/sounds/score.mp3");
+  const flapSound = new Audio("/sounds/flap.mp3");
+  const scoreSound = new Audio("/sounds/score.mp3");
 
   flapSound.preload = "auto";
   scoreSound.preload = "auto";
@@ -74,143 +110,139 @@ export function initFlappyBird() {
   const FLOOR_HEIGHT = 120;
   const groundY = logicalHeight - FLOOR_HEIGHT;
 
-  let floorX = 0;
+  /* ================= SOCKET EVENTS ================= */
+  socket.on("flappyBirdStarted", (data: { birds: Bird[], pipe: Pipe }) => {
+    birds = data.birds;
+    pipe = data.pipe;
+    gameOver = false;
+    floorX = 0;
+  });
 
-  let score = 0;
-  let isGameOver = false;
+  socket.on("flappyBirdUpdate", (data: { birds: Bird[], pipe: Pipe }) => {
+    birds = data.birds;
+    pipe = data.pipe;
+  });
 
-  /* ================= BIRD ================= */
-  let bird = {
-    x: 80,
-    y: 150,
-    w: 40,
-    h: 30,
-    vy: 0
-  };
+  socket.on("flappyBirdDeath", (data: { birdId: string }) => {
+    const bird = birds.find(b => b.id === data.birdId);
+    if (bird) {
+      bird.alive = false;
+    }
+  });
 
-  /* ================= PIPE ================= */
-  let pipe = {
-    x: logicalWidth,
-    width: 70,
-    gap: 160,
-    topHeight: randomPipeHeight()
-  };
-
-  /* ================= UTILS ================= */
-  function randomPipeHeight() {
-    const min = 80;
-    const max = groundY - 120 - min;
-    return Math.floor(Math.random() * (max - min) + min);
-  }
+  socket.on("flappyBirdGameOver", (data: { winner: Bird, birds: Bird[] }) => {
+    gameOver = true;
+    birds = data.birds;
+  });
 
   /* ================= UPDATE ================= */
   function update() {
-    if (isGameOver) return;
-
+    // Update floor animation
     floorX -= 2;
     if (floorX <= -logicalWidth) floorX = 0;
-
-    bird.vy += 0.4;
-    bird.y += bird.vy;
-
-    pipe.x -= 3 + score * 0.2;
-    if (pipe.x + pipe.width < 0) {
-      pipe.x = logicalWidth;
-      pipe.topHeight = randomPipeHeight();
-      score++;
-      playScore();
-    }
-
-    checkCollision();
   }
 
   /* ================= DRAW ================= */
   function draw() {
     ctx.clearRect(0, 0, logicalWidth, logicalHeight);
 
-    ctx.drawImage(backgroundImg, 0, 0, logicalWidth, logicalHeight);
+    // Background
+    if (backgroundImg.complete && backgroundImg.naturalHeight !== 0) {
+      ctx.drawImage(backgroundImg, 0, 0, logicalWidth, logicalHeight);
+    } else {
+      ctx.fillStyle = '#87CEEB';
+      ctx.fillRect(0, 0, logicalWidth, logicalHeight);
+    }
 
     drawPipes();
 
-    ctx.drawImage(birdImg, bird.x, bird.y, bird.w, bird.h);
+    // Draw all birds
+    birds.forEach((bird, index) => {
+      if (!bird.alive) return;
 
-    ctx.drawImage(floorImg, floorX, groundY, logicalWidth + 5, 120);
-    ctx.drawImage(floorImg, floorX + logicalWidth, groundY, logicalWidth, 120);
+      const color = birdColors[index % birdColors.length];
+      
+      if (birdImg.complete && birdImg.naturalHeight !== 0) {
+        ctx.save();
+        
+        // Tint the bird with player color
+        if (bird.id === myId) {
+          ctx.globalAlpha = 1;
+          ctx.shadowColor = color;
+          ctx.shadowBlur = 10;
+        } else {
+          ctx.globalAlpha = 0.7;
+        }
+        
+        ctx.drawImage(birdImg, bird.x, bird.y, 40, 30);
+        ctx.restore();
+      } else {
+        // Fallback: draw colored rectangle
+        ctx.fillStyle = color;
+        ctx.fillRect(bird.x, bird.y, 40, 30);
+      }
 
-    ctx.font = "32px Arial";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "top";
+      // Draw player name
+      ctx.font = "12px Arial";
+      ctx.fillStyle = bird.id === myId ? "yellow" : "white";
+      ctx.textAlign = "center";
+      ctx.fillText(bird.name, bird.x + 20, bird.y - 5);
+    });
 
-    const text = `${score}`;
-    const x = logicalWidth / 2;
-    const y = 40;
+    // Draw floor
+    if (floorImg.complete && floorImg.naturalHeight !== 0) {
+      ctx.drawImage(floorImg, floorX, groundY, logicalWidth + 5, 120);
+      ctx.drawImage(floorImg, floorX + logicalWidth, groundY, logicalWidth, 120);
+    } else {
+      ctx.fillStyle = '#DEB887';
+      ctx.fillRect(0, groundY, logicalWidth, 120);
+    }
 
-    ctx.lineWidth = 4;
-    ctx.strokeStyle = "black";
-    ctx.strokeText(text, x, y);
+    // Draw scores
+    ctx.font = "16px Arial";
+    ctx.textAlign = "left";
+    let yOffset = 40;
+    birds.forEach((bird, index) => {
+      const color = birdColors[index % birdColors.length];
+      ctx.fillStyle = bird.alive ? color : "gray";
+      ctx.fillText(`${bird.name}: ${bird.score}`, 10, yOffset);
+      yOffset += 20;
+    });
 
-    ctx.fillStyle = "orange";
-    ctx.fillText(text, x, y);
-
-    if (isGameOver) {
+    if (gameOver) {
       drawGameOver();
-      return;
     }
   }
 
   /* ================= PIPES ================= */
   function drawPipes() {
-    ctx.save();
-    ctx.translate(pipe.x, pipe.topHeight);
-    ctx.scale(1, -1);
-    ctx.drawImage(pipeImg, 0, 0, pipe.width, pipe.topHeight);
-    ctx.restore();
+    if (pipeImg.complete && pipeImg.naturalHeight !== 0) {
+      // Top pipe (inverted)
+      ctx.save();
+      ctx.translate(pipe.x, pipe.topHeight);
+      ctx.scale(1, -1);
+      ctx.drawImage(pipeImg, 0, 0, pipe.width, pipe.topHeight);
+      ctx.restore();
 
-    const bottomY = pipe.topHeight + pipe.gap;
-    const bottomHeight = groundY - bottomY;
-
-    ctx.drawImage(pipeImg, pipe.x, bottomY, pipe.width, bottomHeight);
-  }
-
-  /* ================= COLLISION ================= */
-  function rectsCollide(a: any, b: any) {
-    return (
-      a.x < b.x + b.w &&
-      a.x + a.w > b.x &&
-      a.y < b.y + b.h &&
-      a.y + a.h > b.y
-    );
-  }
-
-  function checkCollision() {
-    const topPipe = {
-      x: pipe.x,
-      y: 0,
-      w: pipe.width,
-      h: pipe.topHeight
-    };
-
-    const bottomPipe = {
-      x: pipe.x,
-      y: pipe.topHeight + pipe.gap,
-      w: pipe.width,
-      h: groundY - (pipe.topHeight + pipe.gap)
-    };
-
-    if (
-      rectsCollide(bird, topPipe) ||
-      rectsCollide(bird, bottomPipe) ||
-      bird.y + bird.h >= groundY
-    ) {
-      gameOver();
+      // Bottom pipe
+      const bottomY = pipe.topHeight + pipe.gap;
+      const bottomHeight = groundY - bottomY;
+      ctx.drawImage(pipeImg, pipe.x, bottomY, pipe.width, bottomHeight);
+    } else {
+      // Fallback: draw green rectangles
+      ctx.fillStyle = '#228B22';
+      
+      // Top pipe
+      ctx.fillRect(pipe.x, 0, pipe.width, pipe.topHeight);
+      
+      // Bottom pipe
+      const bottomY = pipe.topHeight + pipe.gap;
+      const bottomHeight = groundY - bottomY;
+      ctx.fillRect(pipe.x, bottomY, pipe.width, bottomHeight);
     }
   }
 
   /* ================= GAME OVER ================= */
-  function gameOver() {
-    isGameOver = true;
-  }
-
   function drawGameOver() {
     ctx.fillStyle = "rgba(0,0,0,0.6)";
     ctx.fillRect(0, 0, logicalWidth, logicalHeight);
@@ -218,30 +250,18 @@ export function initFlappyBird() {
     ctx.fillStyle = "red";
     ctx.font = "48px Arial Black";
     ctx.textAlign = "center";
-    ctx.fillText("GAME OVER", logicalWidth / 2, logicalHeight / 2 - 20);
+    ctx.fillText("GAME OVER", logicalWidth / 2, logicalHeight / 2 - 60);
+
+    // Show winner
+    const winner = birds.reduce((max, bird) => 
+      bird.score > max.score ? bird : max
+    , birds[0]);
 
     ctx.font = "24px Arial";
+    ctx.fillStyle = "yellow";
+    ctx.fillText(`🏆 ${winner.name} venceu!`, logicalWidth / 2, logicalHeight / 2 - 20);
     ctx.fillStyle = "white";
-    ctx.fillText(`Score: ${score} pontos`, logicalWidth / 2, logicalHeight / 2 + 20);
-    ctx.fillText("Clique para reiniciar", logicalWidth / 2, logicalHeight / 2 + 50);
-  }
-
-  function resetGame() {
-    // BIRD
-    bird.x = 80;
-    bird.y = 150;
-    bird.vy = 0;
-
-    // PIPE
-    pipe.x = logicalWidth;
-    pipe.topHeight = randomPipeHeight();
-
-    // WORLD
-    floorX = 0;
-
-    // STATE
-    score = 0;
-    isGameOver = false;
+    ctx.fillText(`${winner.score} pontos`, logicalWidth / 2, logicalHeight / 2 + 10);
   }
 
   /* ================= LOOP ================= */
@@ -265,20 +285,28 @@ export function initFlappyBird() {
 
   /* ================= INPUT ================= */
   const handleClick = () => {
-    if (isGameOver) {
-      resetGame();
-    } else {
-      bird.vy = -8;
+    if (!gameOver) {
+      socket.emit("flappyBirdFlap");
       playFlap();
     }
   };
 
   document.addEventListener("click", handleClick);
+  document.addEventListener("keydown", (e) => {
+    if (e.code === "Space" && !gameOver) {
+      socket.emit("flappyBirdFlap");
+      playFlap();
+    }
+  });
 
   requestAnimationFrame(loop);
 
   // Retornar função de cleanup
   return () => {
     document.removeEventListener("click", handleClick);
+    socket.off("flappyBirdStarted");
+    socket.off("flappyBirdUpdate");
+    socket.off("flappyBirdDeath");
+    socket.off("flappyBirdGameOver");
   };
 }
