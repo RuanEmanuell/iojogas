@@ -207,7 +207,7 @@ function startFlappyBirdGame() {
   // Iniciar update periódico LEVE (apenas para sincronizar posições, não física)
   flappyTimer = setInterval(() => {
     broadcastPositions();
-  }, 5); // A cada 5ms (não 60 FPS!)
+  }, 1000 / 60); // 60 FPS
 }
 
 // Broadcast de posições para sincronização leve
@@ -419,7 +419,7 @@ io.on("connection", (socket) => {
   });
 
   // Cliente reporta sua posição periodicamente
-  socket.on("flappyBirdPosition", (data: { x: number, y: number, vy: number, score: number }) => {
+  socket.on("flappyBirdPosition", (data: { x: number, y: number, vy: number, score: number, pipe?: any }) => {
     if (!flappyBirdGameActive) return;
 
     const bird = flappyBirds.find(b => b.id === socket.id);
@@ -428,6 +428,12 @@ io.on("connection", (socket) => {
       bird.y = data.y;
       bird.vy = data.vy;
       bird.score = data.score;
+      
+      // Se apenas 1 pássaro vivo, atualizar a posição do pipe recebida
+      const aliveBirds = flappyBirds.filter(b => b.alive);
+      if (aliveBirds.length === 1 && data.pipe) {
+        flappyPipe = data.pipe;
+      }
     }
   });
 

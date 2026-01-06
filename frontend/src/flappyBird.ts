@@ -240,12 +240,22 @@ export function initFlappyBird(socket: Socket, myId: string, initialData: { bird
 
       // Enviar minha posição pro servidor periodicamente (a cada ~10 frames = ~166ms)
       if (Math.random() < 0.1) {
-        socket.emit("flappyBirdPosition", {
+        // Contar quantos pássaros estão vivos
+        const aliveBirds = gameState.birds.filter(b => b.alive);
+        
+        // Se apenas 1 pássaro vivo, enviar também a posição do pipe
+        const payload: any = {
           x: myBird.x,
           y: myBird.y,
           vy: myBird.vy,
           score: myBird.score
-        });
+        };
+        
+        if (aliveBirds.length === 1) {
+          payload.pipe = gameState.pipe;
+        }
+        
+        socket.emit("flappyBirdPosition", payload);
       }
     }
   }
