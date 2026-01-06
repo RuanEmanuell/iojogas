@@ -71,6 +71,20 @@ function resetGame() {
   answered = false;
   currentQuestion = null;
   flappyBirdGameActive = false;
+  
+  // Reset Flappy Bird state
+  flappyBirds = [];
+  flappyPipe = {
+    x: 360,
+    topHeight: 150,
+    gap: 160,
+    width: 70
+  };
+  
+  if (flappyTimer) {
+    clearInterval(flappyTimer);
+    flappyTimer = null;
+  }
 
   playerList.forEach(p => p.score = 0);
 
@@ -205,7 +219,7 @@ function updateFlappyBird() {
   flappyBirds.forEach(bird => {
     if (!bird.alive) return;
 
-    bird.vy += 0.4;
+    bird.vy += 0.6;
     bird.y += bird.vy;
 
     // Check collision with ground
@@ -233,7 +247,7 @@ function updateFlappyBird() {
   });
 
   // Update pipe
-  flappyPipe.x -= 3;
+  flappyPipe.x -= 4;
   if (flappyPipe.x + flappyPipe.width < 0) {
     flappyPipe.x = 360;
     flappyPipe.topHeight = randomPipeHeight();
@@ -261,7 +275,6 @@ function updateFlappyBird() {
 }
 
 function stopFlappyBirdGame() {
-  flappyBirdGameActive = false;
   if (flappyTimer) {
     clearInterval(flappyTimer);
     flappyTimer = null;
@@ -278,7 +291,9 @@ function stopFlappyBirdGame() {
   });
 
   setTimeout(() => {
+    flappyBirdGameActive = false;
     io.emit("returnToLobby");
+    resetGame();
   }, 5000);
 }
 

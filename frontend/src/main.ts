@@ -8,14 +8,13 @@ const apiUrl = import.meta.env.VITE_API_URL
 
 const socket = io(apiUrl)
 
-let currentGameMode: 'quiz' | 'flappybird' | null = null
-let flappyBirdCleanup: (() => void) | null | undefined = null
+let flappyBirdCleanup: (() => void) | undefined | null = null
+
 
 // ==========================================================
 //  CONEXÃO
 // ==========================================================
 socket.on("connect", () => {
-  console.log(currentGameMode);
   const name =
     prompt("Digite seu nome") ||
     `Player${Math.floor(Math.random() * 9999)}`
@@ -68,12 +67,10 @@ socket.on("playerListUpdate", (playerList: Player[]) => {
     document.querySelector("#app")?.appendChild(gameModeContainer)
 
     document.querySelector("#select-quiz")?.addEventListener("click", () => {
-      currentGameMode = 'quiz'
       showQuizConfig()
     })
 
     document.querySelector("#select-flappybird")?.addEventListener("click", () => {
-      currentGameMode = 'flappybird'
       startFlappyBird()
     })
 
@@ -255,8 +252,6 @@ socket.on("returnToLobby", () => {
     flappyBirdCleanup();
     flappyBirdCleanup = null;
   }
-
-  currentGameMode = null;
 
   // Limpar todos os elementos de configuração de jogo
   document.querySelector("#game-mode-container")?.remove();
@@ -478,25 +473,20 @@ function disableAnswerInput(disabled: boolean) {
 // ==========================================================
 //  FLAPPY BIRD
 // ==========================================================
-socket.on("flappyBirdStarted", () => {
-  document.querySelector("#app")?.classList.add("hidden")
-  document.querySelector("#flappy-bird-game")?.classList.remove("hidden")
-})
-
-socket.on("returnToLobby", () => {
-  const gameEl = document.querySelector("#game") as HTMLElement;
-  gameEl.classList.add("hidden");
-
-  const flappyEl = document.querySelector("#flappy-bird-game") as HTMLElement;
-  flappyEl.classList.add("hidden");
-
+socket.on("flappyBirdStarted", (data: { birds: Array<any>, pipe: any }) => {
+  // Cleanup da instância anterior se existir
   if (flappyBirdCleanup) {
     flappyBirdCleanup();
     flappyBirdCleanup = null;
   }
 
-  document.querySelector("#app")?.classList.remove("hidden");
-});
+  // Esconder lobby e mostrar o jogo
+  document.querySelector("#app")?.classList.add("hidden")
+  document.querySelector("#flappy-bird-game")?.classList.remove("hidden")
+  
+  // Inicializar o jogo para TODOS os clientes com dados iniciais
+  flappyBirdCleanup = initFlappyBird(socket, socket.id ?? "", data)
+})
 
 function startFlappyBird() {
   // Remover a seleção de modo de jogo
@@ -505,10 +495,5 @@ function startFlappyBird() {
   // Enviar evento para o servidor iniciar o jogo
   socket.emit("startFlappyBird")
 
-  // Esconder o lobby e mostrar o jogo Flappy Bird
-  document.querySelector("#app")?.classList.add("hidden")
-  document.querySelector("#flappy-bird-game")?.classList.remove("hidden")
-
-  // Iniciar o jogo
-  flappyBirdCleanup = initFlappyBird(socket, socket.id ?? "")
+  // O jogo será mostrado quando receber o evento flappyBirdStarted do servidor
 }

@@ -17,13 +17,61 @@ interface Pipe {
   width: number;
 }
 
-export function initFlappyBird(socket: Socket, myId: string) {
+// Estado global do jogo
+let globalGameState = {
+  birds: [] as Bird[],
+  pipe: { x: 360, topHeight: 150, gap: 160, width: 70 } as Pipe,
+  gameOver: false,
+  isRunning: false
+};
+
+let socketsRegistered = false;
+
+function setupSocketListeners(socket: Socket) {
+  if (socketsRegistered) return;
+  socketsRegistered = true;
+
+  socket.on("flappyBirdStarted", (data: { birds: Bird[], pipe: Pipe }) => {
+    globalGameState.birds = data.birds;
+    globalGameState.pipe = data.pipe;
+    globalGameState.gameOver = false;
+    globalGameState.isRunning = true;
+  });
+
+  socket.on("flappyBirdUpdate", (data: { birds: Bird[], pipe: Pipe }) => {
+    globalGameState.birds = data.birds;
+    globalGameState.pipe = data.pipe;
+  });
+
+  socket.on("flappyBirdDeath", (data: { birdId: string }) => {
+    const bird = globalGameState.birds.find(b => b.id === data.birdId);
+    if (bird) {
+      bird.alive = false;
+    }
+  });
+
+  socket.on("flappyBirdGameOver", (data: { winner: Bird, birds: Bird[] }) => {
+    globalGameState.gameOver = true;
+    globalGameState.birds = data.birds;
+    globalGameState.isRunning = false;
+  });
+}
+
+export function initFlappyBird(socket: Socket, myId: string, initialData: { birds: Bird[], pipe: Pipe }) {
+  // Setup socket listeners (apenas uma vez)
+  setupSocketListeners(socket);
+  
+  // Atualizar estado global com dados iniciais
+  globalGameState.birds = initialData.birds;
+  globalGameState.pipe = initialData.pipe;
+  globalGameState.gameOver = false;
+  globalGameState.isRunning = true;
   const dpr = window.devicePixelRatio || 1;
 
   const canvas = document.getElementById("canvas") as HTMLCanvasElement;
   if (!canvas) {
     console.error("Canvas não encontrado!");
-    return;
+    return () => {}; // Retornar função vazia se canvas não existir
   }
 
   const ctx = canvas.getContext("2d")!;
@@ -49,15 +97,8 @@ export function initFlappyBird(socket: Socket, myId: string) {
   let accumulator = 0;
 
   /* ================= STATE FROM SERVER ================= */
-  let birds: Bird[] = [];
-  let pipe: Pipe = {
-    x: 360,
-    topHeight: 150,
-    gap: 160,
-    width: 70
-  };
-  let floorX = 0;
-  let gameOver = false;
+  // Usar referência ao estado global
+  const gameState = globalGameState;
 
   /* ================= IMAGENS ================= */
   const birdImg = new Image();
@@ -106,33 +147,12 @@ export function initFlappyBird(socket: Socket, myId: string) {
   const groundY = logicalHeight - FLOOR_HEIGHT;
 
   /* ================= SOCKET EVENTS ================= */
-  socket.on("flappyBirdStarted", (data: { birds: Bird[], pipe: Pipe }) => {
-    birds = data.birds;
-    pipe = data.pipe;
-    gameOver = false;
-    floorX = 0;
-  });
-
-  socket.on("flappyBirdUpdate", (data: { birds: Bird[], pipe: Pipe }) => {
-    birds = data.birds;
-    pipe = data.pipe;
-  });
-
-  socket.on("flappyBirdDeath", (data: { birdId: string }) => {
-    const bird = birds.find(b => b.id === data.birdId);
-    if (bird) {
-      bird.alive = false;
-    }
-  });
-
-  socket.on("flappyBirdGameOver", (data: { winner: Bird, birds: Bird[] }) => {
-    gameOver = true;
-    birds = data.birds;
-  });
+  // Socket listeners já estão configurados globalmente
 
   /* ================= UPDATE ================= */
   function update() {
     // Update floor animation
+    let floorX = 0;
     floorX -= 2;
     if (floorX <= -logicalWidth) floorX = 0;
   }
@@ -152,7 +172,7 @@ export function initFlappyBird(socket: Socket, myId: string) {
     drawPipes();
 
     // Draw all birds
-    birds.forEach((bird, index) => {
+    gameState.birds.forEach((bird, index) => {
       if (!bird.alive) return;
 
       const color = birdColors[index % birdColors.length];
@@ -186,8 +206,8 @@ export function initFlappyBird(socket: Socket, myId: string) {
 
     // Draw floor
     if (floorImg.complete && floorImg.naturalHeight !== 0) {
-      ctx.drawImage(floorImg, floorX, groundY, logicalWidth + 5, 120);
-      ctx.drawImage(floorImg, floorX + logicalWidth, groundY, logicalWidth, 120);
+      ctx.drawImage(floorImg, 0, groundY, logicalWidth + 5, 120);
+      ctx.drawImage(floorImg, logicalWidth, groundY, logicalWidth, 120);
     } else {
       ctx.fillStyle = '#DEB887';
       ctx.fillRect(0, groundY, logicalWidth, 120);
@@ -197,14 +217,14 @@ export function initFlappyBird(socket: Socket, myId: string) {
     ctx.font = "16px Arial";
     ctx.textAlign = "left";
     let yOffset = 40;
-    birds.forEach((bird, index) => {
+    gameState.birds.forEach((bird, index) => {
       const color = birdColors[index % birdColors.length];
       ctx.fillStyle = bird.alive ? color : "gray";
       ctx.fillText(`${bird.name}: ${bird.score}`, 10, yOffset);
       yOffset += 20;
     });
 
-    if (gameOver) {
+    if (gameState.gameOver) {
       drawGameOver();
     }
   }
@@ -214,26 +234,26 @@ export function initFlappyBird(socket: Socket, myId: string) {
     if (pipeImg.complete && pipeImg.naturalHeight !== 0) {
       // Top pipe (inverted)
       ctx.save();
-      ctx.translate(pipe.x, pipe.topHeight);
+      ctx.translate(gameState.pipe.x, gameState.pipe.topHeight);
       ctx.scale(1, -1);
-      ctx.drawImage(pipeImg, 0, 0, pipe.width, pipe.topHeight);
+      ctx.drawImage(pipeImg, 0, 0, gameState.pipe.width, gameState.pipe.topHeight);
       ctx.restore();
 
       // Bottom pipe
-      const bottomY = pipe.topHeight + pipe.gap;
+      const bottomY = gameState.pipe.topHeight + gameState.pipe.gap;
       const bottomHeight = groundY - bottomY;
-      ctx.drawImage(pipeImg, pipe.x, bottomY, pipe.width, bottomHeight);
+      ctx.drawImage(pipeImg, gameState.pipe.x, bottomY, gameState.pipe.width, bottomHeight);
     } else {
       // Fallback: draw green rectangles
       ctx.fillStyle = '#228B22';
       
       // Top pipe
-      ctx.fillRect(pipe.x, 0, pipe.width, pipe.topHeight);
+      ctx.fillRect(gameState.pipe.x, 0, gameState.pipe.width, gameState.pipe.topHeight);
       
       // Bottom pipe
-      const bottomY = pipe.topHeight + pipe.gap;
+      const bottomY = gameState.pipe.topHeight + gameState.pipe.gap;
       const bottomHeight = groundY - bottomY;
-      ctx.fillRect(pipe.x, bottomY, pipe.width, bottomHeight);
+      ctx.fillRect(gameState.pipe.x, bottomY, gameState.pipe.width, bottomHeight);
     }
   }
 
@@ -248,9 +268,9 @@ export function initFlappyBird(socket: Socket, myId: string) {
     ctx.fillText("GAME OVER", logicalWidth / 2, logicalHeight / 2 - 60);
 
     // Show winner
-    const winner = birds.reduce((max, bird) => 
+    const winner = gameState.birds.reduce((max, bird) => 
       bird.score > max.score ? bird : max
-    , birds[0]);
+    , gameState.birds[0]);
 
     ctx.font = "24px Arial";
     ctx.fillStyle = "yellow";
@@ -260,7 +280,11 @@ export function initFlappyBird(socket: Socket, myId: string) {
   }
 
   /* ================= LOOP ================= */
+  let animationFrameId: number;
+
   function loop(time: number) {
+    if (!gameState.isRunning) return;
+
     if (!lastTime) lastTime = time;
 
     const delta = time - lastTime;
@@ -274,34 +298,35 @@ export function initFlappyBird(socket: Socket, myId: string) {
     }
 
     draw();
-
-    requestAnimationFrame(loop);
+    animationFrameId = requestAnimationFrame(loop);
   }
+
+  animationFrameId = requestAnimationFrame(loop);
 
   /* ================= INPUT ================= */
   const handleClick = () => {
-    if (!gameOver) {
+    if (!gameState.gameOver && gameState.isRunning) {
+      socket.emit("flappyBirdFlap");
+      playFlap();
+    }
+  };
+
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.code === "Space" && !gameState.gameOver && gameState.isRunning) {
+      e.preventDefault();
       socket.emit("flappyBirdFlap");
       playFlap();
     }
   };
 
   document.addEventListener("click", handleClick);
-  document.addEventListener("keydown", (e) => {
-    if (e.code === "Space" && !gameOver) {
-      socket.emit("flappyBirdFlap");
-      playFlap();
-    }
-  });
-
-  requestAnimationFrame(loop);
+  document.addEventListener("keydown", handleKeyDown);
 
   // Retornar função de cleanup
   return () => {
+    gameState.isRunning = false;
+    cancelAnimationFrame(animationFrameId);
     document.removeEventListener("click", handleClick);
-    socket.off("flappyBirdStarted");
-    socket.off("flappyBirdUpdate");
-    socket.off("flappyBirdDeath");
-    socket.off("flappyBirdGameOver");
+    document.removeEventListener("keydown", handleKeyDown);
   };
 }
