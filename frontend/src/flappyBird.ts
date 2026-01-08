@@ -402,13 +402,25 @@ export function initFlappyBird(socket: Socket, myId: string, initialData: { bird
 
     const delta = time - lastTime;
     
+    // Proteger contra Alt+Tab: ignorar frames com delta muito grande (> 1 segundo)
+    if (delta > 1000) {
+      lastTime = time;
+      lastFrameTime = time;
+      return;
+    }
+    
     // Limitar a 60 FPS - só processar se passou tempo suficiente
     if (delta < FRAME_TIME) return;
     
     // Calcular deltaTime real desde o último frame processado
-    const deltaTime = time - lastFrameTime;
-    lastFrameTime = time;
+    let deltaTime = time - lastFrameTime;
     
+    // Proteger contra deltaTime gigante
+    if (deltaTime > 100) {
+      deltaTime = FRAME_TIME;
+    }
+    
+    lastFrameTime = time;
     lastTime = time - (delta % FRAME_TIME); // Manter precisão
 
     // Atualizar física se o jogo ainda estiver rodando (com deltaTime)
@@ -461,5 +473,13 @@ export function initFlappyBird(socket: Socket, myId: string, initialData: { bird
     cancelAnimationFrame(animationFrameId);
     document.removeEventListener("click", handleClick);
     document.removeEventListener("keydown", handleKeyDown);
+    
+    // Aguardar um tick antes de remover listeners para evitar race conditions
+    setTimeout(() => {
+      socket.off("flappyBirdStarted");
+      socket.off("flappyBirdUpdate");
+      socket.off("flappyBirdDeath");
+      socket.off("flappyBirdGameOver");
+    }, 0);
   };
 }
