@@ -6,6 +6,7 @@ import { Player } from './types/Player';
 import { Question } from './types/Question';
 import { questionList } from './utils/questions';
 import { normalizeText } from './utils/normalizeText';
+import { impostorWords } from './utils/impostorWords';
 
 dotenv.config();
 
@@ -26,6 +27,10 @@ const io = new Server(server, {
 
 let QUESTION_TIME = 20;
 let MAX_SCORE = 100;
+
+// Impostor game timings (seconds)
+const IMPOSTOR_DISCUSSION_TIME = 120;
+const IMPOSTOR_VOTE_TIME = 30;
 
 let playerList: Player[] = [];
 
@@ -63,6 +68,21 @@ let flappyPipe = {
 let flappyTimer: NodeJS.Timeout | null = null;
 
 /* -----------------------------------------
+   IMPOSTOR STATE
+----------------------------------------- */
+type ImpostorPhase = "discussion" | "vote" | null;
+
+let impostorGameActive = false;
+let impostorId: string | null = null;
+let impostorWord: string | null = null;
+let impostorAlive: Set<string> = new Set();
+let impostorVotes: Record<string, string> = {};
+let impostorPhase: ImpostorPhase = null;
+let impostorTimeLeft = 0;
+let impostorTimer: NodeJS.Timeout | null = null;
+let impostorRound = 0;
+
+/* -----------------------------------------
    FUNÇÕES IMPORTANTES
 ----------------------------------------- */
 
@@ -71,6 +91,19 @@ function resetGame() {
   answered = false;
   currentQuestion = null;
   flappyBirdGameActive = false;
+
+  impostorGameActive = false;
+  impostorId = null;
+  impostorWord = null;
+  impostorAlive = new Set();
+  impostorVotes = {};
+  impostorPhase = null;
+  impostorTimeLeft = 0;
+  impostorRound = 0;
+  if (impostorTimer) {
+    clearInterval(impostorTimer);
+    impostorTimer = null;
+  }
   
   // Reset Flappy Bird state
   flappyBirds = [];
@@ -244,6 +277,201 @@ function stopFlappyBirdGame() {
 }
 
 /* -----------------------------------------
+   IMPOSTOR FUNCTIONS
+----------------------------------------- */
+
+function pickImpostorWord(): string {
+  return impostorWords[Math.floor(Math.random() * impostorWords.length)] || "mistério";
+}
+
+function startImpostorTimer(onEnd: () => void) {
+  if (impostorTimer) clearInterval(impostorTimer);
+  impostorTimer = setInterval(() => {
+    impostorTimeLeft--;
+    io.emit("impostorTimer", {
+      phase: impostorPhase,
+      timeLeft: impostorTimeLeft,
+      round: impostorRound,
+      alive: Array.from(impostorAlive)
+    });
+
+    if (impostorTimeLeft <= 0) {
+      if (impostorTimer) {
+        clearInterval(impostorTimer);
+        impostorTimer = null;
+      }
+      onEnd();
+    }
+  }, 1000);
+}
+
+function broadcastImpostorRoundInfo() {
+  playerList.forEach(p => {
+    const isImpostor = p.id === impostorId;
+    io.to(p.id).emit("impostorRound", {
+      round: impostorRound,
+      role: isImpostor ? "impostor" : "crew",
+      word: isImpostor ? null : impostorWord,
+      alive: Array.from(impostorAlive),
+      phase: impostorPhase,
+      timeLeft: impostorTimeLeft
+    });
+  });
+}
+
+function startImpostorDiscussion(isFirstRound = false) {
+  impostorPhase = "discussion";
+  impostorTimeLeft = IMPOSTOR_DISCUSSION_TIME;
+  impostorVotes = {};
+  if (!isFirstRound) {
+    impostorRound += 1;
+    // Palavra permanece a mesma durante todo o jogo
+  }
+
+  broadcastImpostorRoundInfo();
+  startImpostorTimer(() => startImpostorVotePhase());
+}
+
+function startImpostorVotePhase() {
+  impostorPhase = "vote";
+  impostorTimeLeft = IMPOSTOR_VOTE_TIME;
+  impostorVotes = {};
+
+  io.emit("impostorVoteStart", {
+    timeLeft: impostorTimeLeft,
+    round: impostorRound,
+    alive: Array.from(impostorAlive)
+  });
+
+  startImpostorTimer(() => endImpostorVotePhase());
+}
+
+function computeVoteResult() {
+  const tally: Record<string, number> = {};
+  Object.values(impostorVotes).forEach(targetId => {
+    tally[targetId] = (tally[targetId] || 0) + 1;
+  });
+
+  let topId: string | null = null;
+  let topVotes = 0;
+  let tie = false;
+
+  Object.entries(tally).forEach(([id, count]) => {
+    if (count > topVotes) {
+      topVotes = count;
+      topId = id;
+      tie = false;
+    } else if (count === topVotes) {
+      tie = true;
+    }
+  });
+
+  if (topVotes === 0 || tie) {
+    return { eliminated: null, tie: true };
+  }
+
+  return { eliminated: topId, tie: false };
+}
+
+function checkImpostorWinConditions() {
+  const aliveArray = Array.from(impostorAlive);
+  const impostorAliveStill = impostorId ? impostorAlive.has(impostorId) : false;
+
+  if (!impostorAliveStill) {
+    stopImpostorGame("crew");
+    return true;
+  }
+
+  // Se só restam impostor + 1
+  if (aliveArray.length <= 2 && impostorAliveStill) {
+    stopImpostorGame("impostor");
+    return true;
+  }
+
+  return false;
+}
+
+function endImpostorVotePhase() {
+  if (impostorTimer) {
+    clearInterval(impostorTimer);
+    impostorTimer = null;
+  }
+
+  const { eliminated, tie } = computeVoteResult();
+
+  if (eliminated) {
+    impostorAlive.delete(eliminated);
+  }
+
+  io.emit("impostorVoteResult", {
+    eliminated,
+    tie,
+    alive: Array.from(impostorAlive),
+    round: impostorRound
+  });
+
+  // Verifica condições de vitória
+  if (checkImpostorWinConditions()) return;
+
+  // Próxima rodada
+  startImpostorDiscussion();
+}
+
+function stopImpostorGame(winner: "crew" | "impostor") {
+  if (impostorTimer) {
+    clearInterval(impostorTimer);
+    impostorTimer = null;
+  }
+
+  impostorGameActive = false;
+
+  io.emit("impostorGameOver", {
+    winner,
+    impostorId,
+    word: impostorWord
+  });
+
+  setTimeout(() => {
+    io.emit("returnToLobby");
+    resetGame();
+  }, 5000);
+}
+
+function startImpostorGame() {
+  impostorGameActive = true;
+  impostorRound = 1;
+  impostorWord = pickImpostorWord();
+  impostorPhase = "discussion";
+  impostorTimeLeft = IMPOSTOR_DISCUSSION_TIME;
+  impostorVotes = {};
+  impostorAlive = new Set(playerList.map(p => p.id));
+
+  // Escolhe impostor
+  const pick = playerList[Math.floor(Math.random() * playerList.length)];
+  impostorId = pick?.id || null;
+
+  if (impostorTimer) {
+    clearInterval(impostorTimer);
+    impostorTimer = null;
+  }
+
+  // Enviar papel e palavra individualmente
+  playerList.forEach(p => {
+    const isImpostor = p.id === impostorId;
+    io.to(p.id).emit("impostorGameStarted", {
+      role: isImpostor ? "impostor" : "crew",
+      word: isImpostor ? null : impostorWord,
+      alive: Array.from(impostorAlive),
+      phase: impostorPhase,
+      timeLeft: impostorTimeLeft,
+      round: impostorRound
+    });
+  });
+
+  startImpostorTimer(() => startImpostorVotePhase());
+}
+
+/* -----------------------------------------
    SOCKET.IO
 ----------------------------------------- */
 
@@ -269,6 +497,11 @@ io.on("connection", (socket) => {
     playerList = playerList.filter(p => p.id !== socket.id);
     giveNewLeaderIfNeeded();
     io.emit("playerListUpdate", playerList);
+
+    if (impostorGameActive) {
+      impostorAlive.delete(socket.id);
+      checkImpostorWinConditions();
+    }
   });
 
   socket.emit("initialState", {
@@ -298,6 +531,20 @@ io.on("connection", (socket) => {
     io.emit("gameStarted", { time: QUESTION_TIME, score: MAX_SCORE });
 
     changeQuestion();
+  });
+
+  /* COMEÇAR IMPOSTOR (só o líder) */
+  socket.on("startImpostorGame", () => {
+    if (!playerList.find(p => p.id === socket.id)?.leader) return;
+    if (playerList.length < 3) {
+      socket.emit("impostorError", { message: "É preciso pelo menos 3 jogadores." });
+      return;
+    }
+
+    // Zera qualquer jogo anterior
+    resetGame();
+
+    startImpostorGame();
   });
 
   /* RESPONDER */
@@ -455,6 +702,17 @@ io.on("connection", (socket) => {
         stopFlappyBirdGame();
       }
     }
+  });
+
+  /* IMPOSTOR VOTE */
+  socket.on("impostorVote", ({ targetId }) => {
+    if (!impostorGameActive || impostorPhase !== "vote") return
+    if (!impostorAlive.has(socket.id)) return;
+    if (!impostorAlive.has(targetId)) return;
+
+    impostorVotes[socket.id] = targetId;
+
+    io.to(socket.id).emit("impostorVoteAck", { targetId });
   });
 });
 

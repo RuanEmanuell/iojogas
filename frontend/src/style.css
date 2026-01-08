@@ -1,3 +1,58 @@
 body {
   margin: 0;
 }
+
+/* --- Impostor UI polish --- */
+#impostor-game {
+  max-width: 640px;
+  margin: 0 auto;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+}
+
+#impostor-game h2 {
+  letter-spacing: 0.5px;
+}
+
+#impostor-word {
+  color: #f4d35e;
+}
+
+#impostor-status {
+  font-weight: 600;
+}
+
+#impostor-alive span,
+#impostor-vote button {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+#impostor-alive span {
+  background: #111827;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+#impostor-vote button {
+  background: #b91c1c;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+#impostor-vote button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(185, 28, 28, 0.35);
+}
+
+/* --- Impostor UI full center --- */
+body.impostor-mode {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+body.impostor-mode #impostor-game {
+  margin: 0;
+}

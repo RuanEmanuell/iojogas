@@ -9,6 +9,7 @@ const apiUrl = import.meta.env.VITE_API_URL
 const socket = io(apiUrl)
 
 let flappyBirdCleanup: (() => void) | undefined | null = null
+let playerListCache: Player[] = []
 
 
 // ==========================================================
@@ -30,6 +31,7 @@ socket.on("disconnect", () => {
 //  ATUALIZAÇÃO DA LISTA DE PLAYERS
 // ==========================================================
 socket.on("playerListUpdate", (playerList: Player[]) => {
+  playerListCache = [...playerList]
   playerList = playerList.sort((a, b) => (b.score || 0) - (a.score || 0));
   const list = document.querySelector(".playerList") as HTMLElement
   list.replaceChildren()
@@ -52,17 +54,18 @@ socket.on("playerListUpdate", (playerList: Player[]) => {
     // Seleção de modo de jogo
     const gameModeContainer = document.createElement("div")
     gameModeContainer.id = "game-mode-container"
-    gameModeContainer.classList.add("flex", "flex-col", "gap-4", "mb-6", "items-center")
+    gameModeContainer.classList.add("flex", "flex-col", "gap-4", "mb-6", "items-center", "w-full", "max-w-md")
     gameModeContainer.innerHTML = `
-      <h2 class="text-2xl font-bold text-white">Escolha o Jogo</h2>
-      <div class="flex gap-4">
-        <button id="select-quiz" class="bg-blue-600 hover:bg-blue-800 px-6 py-3 rounded-lg font-bold transition-all">
-          Quiz
-        </button>
-        <button id="select-flappybird" class="bg-purple-600 hover:bg-purple-800 px-6 py-3 rounded-lg font-bold transition-all">
-          Flappy Bird
-        </button>
-      </div>
+      <h2 class="text-3xl font-bold text-white mb-4">Escolha o Jogo</h2>
+      <button id="select-quiz" class="w-full bg-blue-600 hover:bg-blue-800 px-8 py-6 rounded-xl font-bold text-2xl transition-all shadow-lg hover:scale-105">
+        🎯 Quiz
+      </button>
+      <button id="select-flappybird" class="w-full bg-purple-600 hover:bg-purple-800 px-8 py-6 rounded-xl font-bold text-2xl transition-all shadow-lg hover:scale-105">
+        🐦 Flappy Bird
+      </button>
+      <button id="select-impostor" class="w-full bg-red-600 hover:bg-red-800 px-8 py-6 rounded-xl font-bold text-2xl transition-all shadow-lg hover:scale-105">
+        🕵️ Impostor
+      </button>
     `
     document.querySelector("#app")?.appendChild(gameModeContainer)
 
@@ -72,6 +75,10 @@ socket.on("playerListUpdate", (playerList: Player[]) => {
 
     document.querySelector("#select-flappybird")?.addEventListener("click", () => {
       startFlappyBird()
+    })
+
+    document.querySelector("#select-impostor")?.addEventListener("click", () => {
+      startImpostor()
     })
 
     return
@@ -244,9 +251,17 @@ socket.on("showWinner", ({ winner }) => {
 socket.on("returnToLobby", () => {
   const gameEl = document.querySelector("#game") as HTMLElement;
   gameEl.classList.add("hidden");
+  gameEl.classList.remove("flex");
 
   const flappyEl = document.querySelector("#flappy-bird-game") as HTMLElement;
   flappyEl.classList.add("hidden");
+
+   // Impostor cleanup
+  if (impostorUI.container) {
+    showImpostorUI(false)
+    impostorUI.container.remove()
+    impostorUI.container = null
+  }
 
   if (flappyBirdCleanup) {
     flappyBirdCleanup();
@@ -468,6 +483,285 @@ function disableAnswerInput(disabled: boolean) {
 
   if (input) input.disabled = disabled
   if (btn) btn.disabled = disabled
+}
+
+// ==========================================================
+//  IMPOSTOR GAME
+// ==========================================================
+type ImpostorRole = "impostor" | "crew"
+type ImpostorPhase = "discussion" | "vote"
+
+const impostorUI = {
+  container: null as HTMLElement | null,
+  role: null as HTMLElement | null,
+  word: null as HTMLElement | null,
+  phase: null as HTMLElement | null,
+  timer: null as HTMLElement | null,
+  status: null as HTMLElement | null,
+  aliveList: null as HTMLElement | null,
+  voteList: null as HTMLElement | null,
+  round: null as HTMLElement | null,
+  currentPhase: null as ImpostorPhase | null,
+  hasVoted: false
+}
+
+function ensureImpostorUI() {
+  if (impostorUI.container) return
+
+  const div = document.createElement("div")
+  div.id = "impostor-game"
+  div.className = "hidden text-white flex flex-col items-center justify-center gap-6 p-8 w-full h-full"
+
+  div.innerHTML = `
+    <div class="bg-gray-700 rounded-xl p-6 max-w-2xl w-full shadow-2xl">
+      <h2 class="text-4xl font-bold text-center mb-4">🕵️ Impostor</h2>
+      <div class="bg-gray-800 rounded-lg p-4 mb-4">
+        <div class="text-center text-xl mb-2" id="impostor-round">Rodada 1</div>
+        <div class="text-center text-2xl font-bold mb-2" id="impostor-role"></div>
+        <div class="text-center text-3xl font-bold text-yellow-400 mb-2" id="impostor-word"></div>
+      </div>
+      <div class="bg-gray-800 rounded-lg p-4 mb-4">
+        <div class="text-center text-lg mb-1" id="impostor-phase"></div>
+        <div class="text-center text-2xl font-bold text-green-400" id="impostor-timer"></div>
+      </div>
+      <div class="bg-gray-800 rounded-lg p-4 mb-4">
+        <div class="font-semibold mb-2 text-center">Jogadores vivos</div>
+        <div id="impostor-alive" class="flex flex-wrap gap-2 justify-center"></div>
+      </div>
+      <div id="vote-section" class="bg-gray-800 rounded-lg p-4">
+        <div class="font-semibold mb-3 text-center text-lg">Votar para eliminar</div>
+        <div id="impostor-vote" class="flex flex-wrap gap-2 justify-center"></div>
+      </div>
+      <div id="impostor-status" class="text-center text-yellow-300 mt-4 font-semibold"></div>
+    </div>
+  `
+
+  const gameContainer = document.querySelector("#game")
+  if (gameContainer) {
+    gameContainer.appendChild(div)
+  }
+
+  impostorUI.container = div
+  impostorUI.role = div.querySelector("#impostor-role")
+  impostorUI.word = div.querySelector("#impostor-word")
+  impostorUI.phase = div.querySelector("#impostor-phase")
+  impostorUI.timer = div.querySelector("#impostor-timer")
+  impostorUI.status = div.querySelector("#impostor-status")
+  impostorUI.aliveList = div.querySelector("#impostor-alive")
+  impostorUI.voteList = div.querySelector("#impostor-vote")
+  impostorUI.round = div.querySelector("#impostor-round")
+}
+
+function showImpostorUI(show: boolean) {
+  if (!impostorUI.container) ensureImpostorUI();
+  if (!impostorUI.container) return;
+
+  if (show) {
+    impostorUI.container.classList.remove("hidden");
+    impostorUI.container.classList.add("flex");
+  } else {
+    impostorUI.container.classList.add("hidden");
+    impostorUI.container.classList.remove("flex");
+  }
+}
+
+function updateImpostorAlive(players: string[]) {
+  if (!impostorUI.aliveList) return
+  impostorUI.aliveList.replaceChildren()
+  players.forEach(id => {
+    const span = document.createElement("span")
+    span.className = "px-4 py-2 bg-green-600 text-white rounded-lg font-semibold shadow"
+    const player = playerListCache.find(p => p.id === id)
+    span.textContent = player ? player.name : id
+    if (id === socket.id) {
+      span.classList.add("ring-2", "ring-yellow-400")
+    }
+    impostorUI.aliveList?.appendChild(span)
+  })
+}
+
+function renderImpostorVoteButtons(alive: string[]) {
+  if (!impostorUI.voteList) return
+  impostorUI.voteList.replaceChildren()
+
+  const voteSection = document.querySelector("#vote-section")
+  if (!voteSection) return
+
+  alive.forEach(id => {
+    if (id === socket.id) return
+    const btn = document.createElement("button")
+    const player = playerListCache.find(p => p.id === id)
+    btn.textContent = player ? player.name : id
+    btn.className = "px-6 py-3 rounded-lg bg-red-600 hover:bg-red-700 transition-all font-bold shadow-lg hover:scale-105"
+    
+    // Desabilita se já votou ou não está na fase de votação
+    if (impostorUI.hasVoted || impostorUI.currentPhase !== "vote") {
+      btn.disabled = true
+      btn.classList.add("opacity-50", "cursor-not-allowed")
+    }
+    
+    btn.onclick = () => {
+      // Verificação extra antes de enviar o voto
+      if (impostorUI.currentPhase !== "vote" || impostorUI.hasVoted) {
+        if (impostorUI.status) impostorUI.status.textContent = "❌ Não é possível votar agora!"
+        return
+      }
+      
+      socket.emit("impostorVote", { targetId: id })
+      impostorUI.hasVoted = true
+      if (impostorUI.status) impostorUI.status.textContent = `✅ Voto enviado para ${btn.textContent}`
+      
+      // Desabilita todos os botões após votar
+      const allBtns = impostorUI.voteList?.querySelectorAll("button")
+      allBtns?.forEach(b => {
+        (b as HTMLButtonElement).disabled = true
+        b.classList.add("opacity-50", "cursor-not-allowed")
+      })
+    }
+    impostorUI.voteList?.appendChild(btn)
+  })
+}
+
+socket.on("impostorGameStarted", (data: { role: ImpostorRole, word: string | null, alive: string[], phase: ImpostorPhase, timeLeft: number, round: number }) => {
+  // Esconde outras telas
+  document.querySelector("#app")?.classList.add("hidden")
+  document.querySelector("#flappy-bird-game")?.classList.add("hidden")
+  
+  // Mostra a tela de jogo
+  const gameEl = document.querySelector("#game")
+  gameEl?.classList.remove("hidden")
+  gameEl?.classList.add("flex")
+  
+  // Limpa conteúdo anterior
+  if (gameEl) gameEl.innerHTML = ""
+  
+  // Cria UI do impostor
+  ensureImpostorUI()
+  showImpostorUI(true)
+
+  // Atualiza fase atual e reseta voto
+  impostorUI.currentPhase = data.phase
+  impostorUI.hasVoted = false
+
+  if (impostorUI.role) impostorUI.role.textContent = data.role === "impostor" ? "🔪 Você é o Impostor" : "✅ Você é da Tripulação"
+  if (impostorUI.word) impostorUI.word.textContent = data.word ? `Palavra: ${data.word}` : "❓ Você não sabe a palavra"
+  if (impostorUI.phase) impostorUI.phase.textContent = `Fase: ${data.phase === "discussion" ? "Discussão" : "Votação"}`
+  if (impostorUI.timer) impostorUI.timer.textContent = `⏱️ ${data.timeLeft}s`
+  if (impostorUI.round) impostorUI.round.textContent = `Rodada ${data.round}`
+  updateImpostorAlive(data.alive)
+  
+  // Esconde seção de voto durante discussão
+  const voteSection = document.querySelector("#vote-section") as HTMLElement
+  if (voteSection) voteSection.style.display = data.phase === "discussion" ? "none" : "block"
+  
+  if (data.phase !== "discussion") {
+    renderImpostorVoteButtons(data.alive)
+  }
+  
+  if (impostorUI.status) impostorUI.status.textContent = data.phase === "discussion" ? "💬 Discussão em andamento..." : "🗳️ Hora de votar!"
+})
+
+socket.on("impostorRound", (data: { role: ImpostorRole, word: string | null, alive: string[], phase: ImpostorPhase, timeLeft: number, round: number }) => {
+  ensureImpostorUI()
+  showImpostorUI(true)
+
+  // Atualiza fase e reseta voto para nova rodada
+  impostorUI.currentPhase = data.phase
+  impostorUI.hasVoted = false
+
+  if (impostorUI.role) impostorUI.role.textContent = data.role === "impostor" ? "🔪 Você é o Impostor" : "✅ Você é da Tripulação"
+  if (impostorUI.word) impostorUI.word.textContent = data.word ? `Palavra: ${data.word}` : "❓ Você não sabe a palavra"
+  if (impostorUI.phase) impostorUI.phase.textContent = `Fase: ${data.phase === "discussion" ? "Discussão" : "Votação"}`
+  if (impostorUI.timer) impostorUI.timer.textContent = `⏱️ ${data.timeLeft}s`
+  if (impostorUI.round) impostorUI.round.textContent = `Rodada ${data.round}`
+  updateImpostorAlive(data.alive)
+  
+  // Esconde seção de voto durante discussão
+  const voteSection = document.querySelector("#vote-section") as HTMLElement
+  if (voteSection) voteSection.style.display = data.phase === "discussion" ? "none" : "block"
+  
+  if (data.phase !== "discussion") {
+    renderImpostorVoteButtons(data.alive)
+  }
+  
+  if (impostorUI.status) impostorUI.status.textContent = data.phase === "discussion" ? "💬 Discussão em andamento..." : "🗳️ Hora de votar!"
+})
+
+socket.on("impostorTimer", (data: { phase: ImpostorPhase, timeLeft: number, round: number, alive: string[] }) => {
+  if (impostorUI.timer) impostorUI.timer.textContent = `⏱️ ${data.timeLeft}s`
+  if (impostorUI.phase) impostorUI.phase.textContent = `Fase: ${data.phase === "discussion" ? "Discussão" : "Votação"}`
+  if (impostorUI.round) impostorUI.round.textContent = `Rodada ${data.round}`
+  updateImpostorAlive(data.alive)
+})
+
+socket.on("impostorVoteStart", (data: { timeLeft: number, alive: string[], round: number }) => {
+  // Atualiza fase para votação e reseta voto
+  impostorUI.currentPhase = "vote"
+  impostorUI.hasVoted = false
+  
+  if (impostorUI.phase) impostorUI.phase.textContent = "Fase: Votação"
+  if (impostorUI.timer) impostorUI.timer.textContent = `⏱️ ${data.timeLeft}s`
+  if (impostorUI.round) impostorUI.round.textContent = `Rodada ${data.round}`
+  if (impostorUI.status) impostorUI.status.textContent = "🗳️ Hora de votar!"
+  
+  // Mostra seção de voto
+  const voteSection = document.querySelector("#vote-section") as HTMLElement
+  if (voteSection) voteSection.style.display = "block"
+  
+  updateImpostorAlive(data.alive)
+  renderImpostorVoteButtons(data.alive)
+})
+
+socket.on("impostorVoteResult", (data: { eliminated: string | null, tie: boolean, alive: string[], round: number }) => {
+  // Remove fase de votação
+  impostorUI.currentPhase = null
+  
+  const voteSection = document.querySelector("#vote-section") as HTMLElement
+  if (voteSection) voteSection.style.display = "none"
+  
+  if (data.tie) {
+    if (impostorUI.status) impostorUI.status.textContent = "⚖️ Empate! Ninguém foi eliminado."
+  } else if (data.eliminated) {
+    const player = playerListCache.find(p => p.id === data.eliminated)
+    if (impostorUI.status) impostorUI.status.textContent = `💀 ${player?.name || "Jogador"} foi eliminado!`
+  } else {
+    if (impostorUI.status) impostorUI.status.textContent = "❌ Nenhum voto foi registrado."
+  }
+  
+  updateImpostorAlive(data.alive)
+})
+
+socket.on("impostorGameOver", (data: { winner: "crew" | "impostor", impostorId: string | null, word: string | null }) => {
+  const impostor = playerListCache.find(p => p.id === data.impostorId)
+  const impostorName = impostor?.name || "Desconhecido"
+  
+  if (impostorUI.container) {
+    impostorUI.container.innerHTML = `
+      <div class="bg-gray-700 rounded-xl p-8 max-w-2xl w-full shadow-2xl text-center">
+        <h2 class="text-5xl font-bold mb-6">${data.winner === "crew" ? "👥 Tripulação Venceu!" : "🔪 Impostor Venceu!"}</h2>
+        <div class="bg-gray-800 rounded-lg p-6 mb-4">
+          <p class="text-2xl mb-2">O impostor era:</p>
+          <p class="text-3xl font-bold text-red-400 mb-4">${impostorName}</p>
+          ${data.word ? `<p class="text-xl">Palavra secreta: <span class="font-bold text-yellow-400">${data.word}</span></p>` : ""}
+        </div>
+        <p class="text-xl text-gray-300">Voltando ao lobby...</p>
+      </div>
+    `
+  }
+})
+
+socket.on("impostorVoteAck", ({ targetId }: { targetId: string }) => {
+  const player = playerListCache.find(p => p.id === targetId)
+  if (impostorUI.status) impostorUI.status.textContent = `Voto confirmado em ${player?.name || targetId}`
+})
+
+socket.on("impostorError", ({ message }: { message: string }) => {
+  alert(message)
+})
+
+function startImpostor() {
+  document.querySelector("#game-mode-container")?.remove()
+  socket.emit("startImpostorGame")
 }
 
 // ==========================================================
