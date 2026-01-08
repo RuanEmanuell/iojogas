@@ -807,9 +807,18 @@ socket.on("flappyBirdStarted", (data: { birds: Array<any>, pipe: any }) => {
     flappyBirdCleanup = null;
   }
 
+  // Garantir que a div do flappy bird existe
+  let flappyEl = document.querySelector("#flappy-bird-game") as HTMLElement;
+  if (!flappyEl) {
+    flappyEl = document.createElement("div");
+    flappyEl.id = "flappy-bird-game";
+    flappyEl.innerHTML = '<canvas id="canvas"></canvas>';
+    document.body.appendChild(flappyEl);
+  }
+
   // Esconder lobby e mostrar o jogo
   document.querySelector("#app")?.classList.add("hidden")
-  document.querySelector("#flappy-bird-game")?.classList.remove("hidden")
+  flappyEl.classList.remove("hidden")
   
   // Inicializar o jogo para TODOS os clientes com dados iniciais
   flappyBirdCleanup = initFlappyBird(socket, socket.id ?? "", data)

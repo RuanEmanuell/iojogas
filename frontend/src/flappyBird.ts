@@ -120,6 +120,8 @@ export function initFlappyBird(socket: Socket, myId: string, initialData: { bird
   const FRAME_TIME = 1000 / TARGET_FPS;
 
   let lastTime = 0;
+  let lastFrameTime = 0;
+  let canPlayFlap = true;
 
   /* ================= STATE FROM SERVER ================= */
   // Usar referência ao estado global
@@ -151,9 +153,6 @@ export function initFlappyBird(socket: Socket, myId: string, initialData: { bird
   flapSound.preload = "auto";
   scoreSound.preload = "auto";
 
-  let canPlayFlap = true;
-  const flapCooldown = 250;
-
   function playFlap() {
     if (!canPlayFlap) return;
 
@@ -164,7 +163,7 @@ export function initFlappyBird(socket: Socket, myId: string, initialData: { bird
 
     setTimeout(() => {
       canPlayFlap = true;
-    }, flapCooldown);
+    }, 250);
   }
 
   /* ================= WORLD ================= */
@@ -174,7 +173,7 @@ export function initFlappyBird(socket: Socket, myId: string, initialData: { bird
   // Constantes de física
   const GRAVITY = 0.5;
   const JUMP_VELOCITY = -9;
-  const PIPE_SPEED = 2.5;
+  const PIPE_SPEED = 1.8;
   const FLOOR_SPEED = 1.5;
 
   /* ================= SOCKET EVENTS ================= */
@@ -390,7 +389,6 @@ export function initFlappyBird(socket: Socket, myId: string, initialData: { bird
 
   /* ================= LOOP ================= */
   let animationFrameId: number;
-  let lastFrameTime = 0;
 
   function loop(time: number) {
     if (!gameState.loopActive) return; // Parar apenas quando desmontar
