@@ -32,11 +32,8 @@ let globalGameState = {
 // Socket listeners serão configurados dentro de initFlappyBird
 
 export function initFlappyBird(socket: Socket, myId: string, initialData: { birds: Bird[], pipe: Pipe }) {
-  // Remover listeners antigos ANTES de resetar
-  socket.removeAllListeners("flappyBirdStarted");
-  socket.removeAllListeners("flappyBirdUpdate");
-  socket.removeAllListeners("flappyBirdDeath");
-  socket.removeAllListeners("flappyBirdGameOver");
+  // Importante: não remover todos os listeners globais do socket,
+  // isso apaga handlers definidos em main.ts e impede reinícios.
 
   // Resetar estado global completamente
   globalGameState = {
@@ -49,17 +46,18 @@ export function initFlappyBird(socket: Socket, myId: string, initialData: { bird
     myId: myId
   };
   
-  // Setup socket listeners (recria a cada jogo)
-  socket.on("flappyBirdStarted", (data: { birds: Bird[], pipe: Pipe }) => {
+  // Setup socket listeners (recria e guarda referências para cleanup)
+  const onFlappyBirdStarted = (data: { birds: Bird[], pipe: Pipe }) => {
     globalGameState.birds = data.birds.map(b => ({ ...b, scoredThisFrame: false }));
     globalGameState.pipe = data.pipe;
     globalGameState.gameOver = false;
     globalGameState.isRunning = true;
     globalGameState.loopActive = true;
     globalGameState.floorX = 0;
-  });
+  };
+  socket.on("flappyBirdStarted", onFlappyBirdStarted);
 
-  socket.on("flappyBirdUpdate", (data: { birds: Bird[], pipe: Pipe }) => {
+  const onFlappyBirdUpdate = (data: { birds: Bird[], pipe: Pipe }) => {
     globalGameState.pipe = data.pipe;
 
     data.birds.forEach(serverBird => {
@@ -77,21 +75,24 @@ export function initFlappyBird(socket: Socket, myId: string, initialData: { bird
         }
       }
     });
-  });
+  };
+  socket.on("flappyBirdUpdate", onFlappyBirdUpdate);
 
-  socket.on("flappyBirdDeath", (data: { birdId: string }) => {
+  const onFlappyBirdDeath = (data: { birdId: string }) => {
     const bird = globalGameState.birds.find(b => b.id === data.birdId);
     if (bird) {
       bird.alive = false;
     }
-  });
+  };
+  socket.on("flappyBirdDeath", onFlappyBirdDeath);
 
-  socket.on("flappyBirdGameOver", (data: { winner: Bird, birds: Bird[] }) => {
+  const onFlappyBirdGameOver = (data: { winner: Bird, birds: Bird[] }) => {
     globalGameState.gameOver = true;
     globalGameState.birds = data.birds;
     globalGameState.isRunning = false;
     globalGameState.loopActive = true;
-  });
+  };
+  socket.on("flappyBirdGameOver", onFlappyBirdGameOver);
   const dpr = window.devicePixelRatio || 1;
 
   const canvas = document.getElementById("canvas") as HTMLCanvasElement;
@@ -170,11 +171,10 @@ export function initFlappyBird(socket: Socket, myId: string, initialData: { bird
   const FLOOR_HEIGHT = 120;
   const groundY = logicalHeight - FLOOR_HEIGHT;
 
-  // Constantes de física
-  const GRAVITY = 0.5;
-  const JUMP_VELOCITY = -9;
-  const PIPE_SPEED = 1.8;
-  const FLOOR_SPEED = 1.5;
+  // Constantes de física (ritmo médio)
+  const GRAVITY = 0.45;
+  const JUMP_VELOCITY = -8.8;
+  const FLOOR_SPEED = 1.25;
 
   /* ================= SOCKET EVENTS ================= */
   // Socket listeners já estão configurados globalmente
@@ -190,15 +190,7 @@ export function initFlappyBird(socket: Socket, myId: string, initialData: { bird
     gameState.floorX -= FLOOR_SPEED * dt;
     if (gameState.floorX <= -logicalWidth) gameState.floorX = 0;
 
-    // Mover pipe
-    gameState.pipe.x -= PIPE_SPEED * dt;
-
-    // Se pipe passou da tela, resetar
-    if (gameState.pipe.x + gameState.pipe.width < 0) {
-      gameState.pipe.x = logicalWidth;
-      // Gerar nova altura aleatória
-      gameState.pipe.topHeight = Math.floor(Math.random() * 200) + 100;
-    }
+    // Pipe: não mover localmente; usamos posição enviada pelo servidor
 
     // Atualizar MEU pássaro localmente
     const myBird = gameState.birds.find(b => b.id === myId);
@@ -233,24 +225,20 @@ export function initFlappyBird(socket: Socket, myId: string, initialData: { bird
         socket.emit("flappyBirdDeath", { score: myBird.score });
       }
 
-      // Verificar se passou pelo pipe (pontuar)
-      // Contar quando o pipe passa completamente pelo pássaro
-      if (myBird.alive && !myBird.scoredThisFrame) {
-        const pipeRight = gameState.pipe.x + gameState.pipe.width;
-        const birdCenterX = myBird.x + 20; // Centro do pássaro
-        
-        // Se o pipe estava à direita e agora passou (está à esquerda)
-        if (pipeRight <= birdCenterX && pipeRight + (PIPE_SPEED * dt * 2) > birdCenterX) {
-          myBird.score++;
-          myBird.scoredThisFrame = true;
-          scoreSound.currentTime = 0;
-          scoreSound.play().catch(e => console.log(e));
-        }
-      }
-      
-      // Reset flag quando o pipe ficou bem distante para trás
-      if (myBird.alive && gameState.pipe.x + gameState.pipe.width < myBird.x - 100) {
+      // Verificar se passou pelo pipe (pontuar) usando posição do servidor
+      const birdCenterX = myBird.x + 20; // Centro do pássaro
+
+      // Reset da flag quando o pipe está novamente à frente do pássaro
+      if (pipeRight > birdCenterX) {
         myBird.scoredThisFrame = false;
+      }
+
+      // Se o pipe acabou de passar para trás do pássaro, pontuar uma vez
+      if (myBird.alive && !myBird.scoredThisFrame && pipeRight <= birdCenterX) {
+        myBird.score++;
+        myBird.scoredThisFrame = true;
+        scoreSound.currentTime = 0;
+        scoreSound.play().catch(e => console.log(e));
       }
       
       // Enviar posição a cada frame (~60 FPS)
@@ -471,5 +459,10 @@ export function initFlappyBird(socket: Socket, myId: string, initialData: { bird
     cancelAnimationFrame(animationFrameId);
     document.removeEventListener("click", handleClick);
     document.removeEventListener("keydown", handleKeyDown);
+    // Remover somente os listeners criados por esta instância
+    socket.off("flappyBirdStarted", onFlappyBirdStarted);
+    socket.off("flappyBirdUpdate", onFlappyBirdUpdate);
+    socket.off("flappyBirdDeath", onFlappyBirdDeath);
+    socket.off("flappyBirdGameOver", onFlappyBirdGameOver);
   };
 }

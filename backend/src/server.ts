@@ -248,7 +248,8 @@ function broadcastPositions() {
   if (!flappyBirdGameActive) return;
 
   // Atualizar pipe do servidor (fazer progresso mesmo se nenhum cliente reportar)
-  flappyPipe.x -= 1.8; // mesma velocidade do cliente
+  // Velocidade média para uma experiência balanceada
+  flappyPipe.x -= 2;
   
   // Resetar pipe quando sai da tela
   if (flappyPipe.x + flappyPipe.width < 0) {
