@@ -29,7 +29,7 @@ let QUESTION_TIME = 20;
 let MAX_SCORE = 100;
 
 // Impostor game timings (seconds)
-const IMPOSTOR_DISCUSSION_TIME = 120;
+const IMPOSTOR_DISCUSSION_TIME = 90;
 const IMPOSTOR_VOTE_TIME = 30;
 
 let playerList: Player[] = [];

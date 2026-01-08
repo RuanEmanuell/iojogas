@@ -29,10 +29,29 @@ let globalGameState = {
   myId: "" as string
 };
 
-function setupSocketListeners(socket: Socket, myId: string) {
+// Socket listeners serão configurados dentro de initFlappyBird
 
+export function initFlappyBird(socket: Socket, myId: string, initialData: { birds: Bird[], pipe: Pipe }) {
+  // Remover listeners antigos ANTES de resetar
+  socket.off("flappyBirdStarted");
+  socket.off("flappyBirdUpdate");
+  socket.off("flappyBirdDeath");
+  socket.off("flappyBirdGameOver");
+
+  // Resetar estado global completamente
+  globalGameState = {
+    birds: initialData.birds.map(b => ({ ...b, scoredThisFrame: false })),
+    pipe: { ...initialData.pipe },
+    floorX: 0,
+    gameOver: false,
+    isRunning: true,
+    loopActive: true,
+    myId: myId
+  };
+  
+  // Setup socket listeners (recria a cada jogo)
   socket.on("flappyBirdStarted", (data: { birds: Bird[], pipe: Pipe }) => {
-    globalGameState.birds = data.birds;
+    globalGameState.birds = data.birds.map(b => ({ ...b, scoredThisFrame: false }));
     globalGameState.pipe = data.pipe;
     globalGameState.gameOver = false;
     globalGameState.isRunning = true;
@@ -40,16 +59,14 @@ function setupSocketListeners(socket: Socket, myId: string) {
     globalGameState.floorX = 0;
   });
 
-  // Receber updates periódicos dos OUTROS jogadores (não precisa ser todo frame)
   socket.on("flappyBirdUpdate", (data: { birds: Bird[], pipe: Pipe }) => {
-    // Sempre atualizar o pipe do servidor
     globalGameState.pipe = data.pipe;
 
     data.birds.forEach(serverBird => {
       const localBird = globalGameState.birds.find(b => b.id === serverBird.id);
       if (localBird) {
         const isMe = serverBird.id === myId;
-        const shouldUpdate = !isMe; // nunca sobrescreve o pássaro local
+        const shouldUpdate = !isMe;
 
         if (shouldUpdate) {
           localBird.x = serverBird.x;
@@ -75,22 +92,6 @@ function setupSocketListeners(socket: Socket, myId: string) {
     globalGameState.isRunning = false;
     globalGameState.loopActive = true;
   });
-}
-
-export function initFlappyBird(socket: Socket, myId: string, initialData: { birds: Bird[], pipe: Pipe }) {
-  // Resetar estado global completamente
-  globalGameState = {
-    birds: [...initialData.birds],
-    pipe: { ...initialData.pipe },
-    floorX: 0,
-    gameOver: false,
-    isRunning: true,
-    loopActive: true,
-    myId: myId
-  };
-  
-  // Setup socket listeners (recria a cada jogo)
-  setupSocketListeners(socket, myId);
   const dpr = window.devicePixelRatio || 1;
 
   const canvas = document.getElementById("canvas") as HTMLCanvasElement;
@@ -460,11 +461,5 @@ export function initFlappyBird(socket: Socket, myId: string, initialData: { bird
     cancelAnimationFrame(animationFrameId);
     document.removeEventListener("click", handleClick);
     document.removeEventListener("keydown", handleKeyDown);
-    
-    // Remover todos os listeners de socket para evitar duplicatas
-    socket.off("flappyBirdStarted");
-    socket.off("flappyBirdUpdate");
-    socket.off("flappyBirdDeath");
-    socket.off("flappyBirdGameOver");
   };
 }
