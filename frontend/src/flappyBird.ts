@@ -33,10 +33,10 @@ let globalGameState = {
 
 export function initFlappyBird(socket: Socket, myId: string, initialData: { birds: Bird[], pipe: Pipe }) {
   // Remover listeners antigos ANTES de resetar
-  socket.off("flappyBirdStarted");
-  socket.off("flappyBirdUpdate");
-  socket.off("flappyBirdDeath");
-  socket.off("flappyBirdGameOver");
+  socket.removeAllListeners("flappyBirdStarted");
+  socket.removeAllListeners("flappyBirdUpdate");
+  socket.removeAllListeners("flappyBirdDeath");
+  socket.removeAllListeners("flappyBirdGameOver");
 
   // Resetar estado global completamente
   globalGameState = {
@@ -233,25 +233,25 @@ export function initFlappyBird(socket: Socket, myId: string, initialData: { bird
         socket.emit("flappyBirdDeath", { score: myBird.score });
       }
 
-    // Verificar se passou pelo pipe (pontuar)
-    // Contar quando o pipe passa completamente pelo pássaro
-    if (myBird.alive && !myBird.scoredThisFrame) {
-      const pipeRight = gameState.pipe.x + gameState.pipe.width;
-      const birdCenterX = myBird.x + 20; // Centro do pássaro
-      
-      // Se o pipe estava à direita e agora passou (está à esquerda)
-      if (pipeRight <= birdCenterX && pipeRight + (PIPE_SPEED * dt * 2) > birdCenterX) {
-        myBird.score++;
-        myBird.scoredThisFrame = true;
-        scoreSound.currentTime = 0;
-        scoreSound.play().catch(e => console.log(e));
+      // Verificar se passou pelo pipe (pontuar)
+      // Contar quando o pipe passa completamente pelo pássaro
+      if (myBird.alive && !myBird.scoredThisFrame) {
+        const pipeRight = gameState.pipe.x + gameState.pipe.width;
+        const birdCenterX = myBird.x + 20; // Centro do pássaro
+        
+        // Se o pipe estava à direita e agora passou (está à esquerda)
+        if (pipeRight <= birdCenterX && pipeRight + (PIPE_SPEED * dt * 2) > birdCenterX) {
+          myBird.score++;
+          myBird.scoredThisFrame = true;
+          scoreSound.currentTime = 0;
+          scoreSound.play().catch(e => console.log(e));
+        }
       }
-    }
-    
-    // Reset flag quando o pipe ficou bem distante para trás
-    if (gameState.pipe.x + gameState.pipe.width < myBird.x - 100) {
-      myBird.scoredThisFrame = false;
-    }
+      
+      // Reset flag quando o pipe ficou bem distante para trás
+      if (myBird.alive && gameState.pipe.x + gameState.pipe.width < myBird.x - 100) {
+        myBird.scoredThisFrame = false;
+      }
       
       // Enviar posição a cada frame (~60 FPS)
       const payload = {
@@ -471,13 +471,5 @@ export function initFlappyBird(socket: Socket, myId: string, initialData: { bird
     cancelAnimationFrame(animationFrameId);
     document.removeEventListener("click", handleClick);
     document.removeEventListener("keydown", handleKeyDown);
-    
-    // Aguardar um tick antes de remover listeners para evitar race conditions
-    setTimeout(() => {
-      socket.off("flappyBirdStarted");
-      socket.off("flappyBirdUpdate");
-      socket.off("flappyBirdDeath");
-      socket.off("flappyBirdGameOver");
-    }, 0);
   };
 }
