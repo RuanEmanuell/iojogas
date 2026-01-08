@@ -8,6 +8,7 @@ interface Bird {
   vy: number;
   alive: boolean;
   score: number;
+  scoredThisFrame?: boolean;
 }
 
 interface Pipe {
@@ -28,11 +29,7 @@ let globalGameState = {
   myId: "" as string
 };
 
-let socketsRegistered = false;
-
 function setupSocketListeners(socket: Socket, myId: string) {
-  if (socketsRegistered) return;
-  socketsRegistered = true;
 
   socket.on("flappyBirdStarted", (data: { birds: Bird[], pipe: Pipe }) => {
     globalGameState.birds = data.birds;
@@ -45,15 +42,8 @@ function setupSocketListeners(socket: Socket, myId: string) {
 
   // Receber updates periódicos dos OUTROS jogadores (não precisa ser todo frame)
   socket.on("flappyBirdUpdate", (data: { birds: Bird[], pipe: Pipe }) => {
-    // Identificar quem é o único vivo (se existir)
-    const alive = data.birds.filter(b => b.alive);
-    const soleAliveId = alive.length === 1 ? alive[0].id : null;
-
-    // Só aplicar pipe do servidor para espectadores / mortos.
-    // Evita travar o jogador vivo com lag de rede.
-    if (data.pipe && soleAliveId !== myId) {
-      globalGameState.pipe = data.pipe;
-    }
+    // Sempre atualizar o pipe do servidor
+    globalGameState.pipe = data.pipe;
 
     data.birds.forEach(serverBird => {
       const localBird = globalGameState.birds.find(b => b.id === serverBird.id);
@@ -88,19 +78,19 @@ function setupSocketListeners(socket: Socket, myId: string) {
 }
 
 export function initFlappyBird(socket: Socket, myId: string, initialData: { birds: Bird[], pipe: Pipe }) {
-  // Guardar myId no estado global
-  globalGameState.myId = myId;
+  // Resetar estado global completamente
+  globalGameState = {
+    birds: [...initialData.birds],
+    pipe: { ...initialData.pipe },
+    floorX: 0,
+    gameOver: false,
+    isRunning: true,
+    loopActive: true,
+    myId: myId
+  };
   
-  // Setup socket listeners (apenas uma vez)
+  // Setup socket listeners (recria a cada jogo)
   setupSocketListeners(socket, myId);
-  
-  // Atualizar estado global com dados iniciais
-  globalGameState.birds = initialData.birds;
-  globalGameState.pipe = initialData.pipe;
-  globalGameState.gameOver = false;
-  globalGameState.isRunning = true;
-  globalGameState.loopActive = true;
-  globalGameState.floorX = 0;
   const dpr = window.devicePixelRatio || 1;
 
   const canvas = document.getElementById("canvas") as HTMLCanvasElement;
@@ -243,36 +233,35 @@ export function initFlappyBird(socket: Socket, myId: string, initialData: { bird
         socket.emit("flappyBirdDeath", { score: myBird.score });
       }
 
-      // Verificar se passou pelo pipe (pontuar)
-      if (myBird.alive && gameState.pipe.x + gameState.pipe.width < myBird.x && gameState.pipe.x + gameState.pipe.width >= myBird.x - (PIPE_SPEED * dt)) {
+    // Verificar se passou pelo pipe (pontuar)
+    // Contar quando o pipe passa completamente pelo pássaro
+    if (myBird.alive && !myBird.scoredThisFrame) {
+      const pipeRight = gameState.pipe.x + gameState.pipe.width;
+      const birdCenterX = myBird.x + 20; // Centro do pássaro
+      
+      // Se o pipe estava à direita e agora passou (está à esquerda)
+      if (pipeRight <= birdCenterX && pipeRight + (PIPE_SPEED * dt * 2) > birdCenterX) {
         myBird.score++;
+        myBird.scoredThisFrame = true;
         scoreSound.currentTime = 0;
         scoreSound.play().catch(e => console.log(e));
       }
-
-      // Contar quantos pássaros estão vivos
-      const aliveBirds = gameState.birds.filter(b => b.alive);
+    }
+    
+    // Reset flag quando o pipe ficou bem distante para trás
+    if (gameState.pipe.x + gameState.pipe.width < myBird.x - 100) {
+      myBird.scoredThisFrame = false;
+    }
       
-      // Se há apenas 1 vivo, enviar a cada frame. Senão, enviar ~10% dos frames
-      // Para reduzir lag em deploy, limita envio quando único vivo a ~30 FPS
-      const isSoleAlive = aliveBirds.length === 1;
-      const shouldSend = (isSoleAlive ? Math.random() < 0.5 : Math.random() < 0.1);
+      // Enviar posição a cada frame (~60 FPS)
+      const payload = {
+        x: myBird.x,
+        y: myBird.y,
+        vy: myBird.vy,
+        score: myBird.score
+      };
       
-      if (shouldSend) {
-        // Se apenas 1 pássaro vivo, enviar também a posição do pipe
-        const payload: any = {
-          x: myBird.x,
-          y: myBird.y,
-          vy: myBird.vy,
-          score: myBird.score
-        };
-        
-        if (isSoleAlive) {
-          payload.pipe = gameState.pipe;
-        }
-        
-        socket.emit("flappyBirdPosition", payload);
-      }
+      socket.emit("flappyBirdPosition", payload);
     }
   }
 
@@ -471,5 +460,11 @@ export function initFlappyBird(socket: Socket, myId: string, initialData: { bird
     cancelAnimationFrame(animationFrameId);
     document.removeEventListener("click", handleClick);
     document.removeEventListener("keydown", handleKeyDown);
+    
+    // Remover todos os listeners de socket para evitar duplicatas
+    socket.off("flappyBirdStarted");
+    socket.off("flappyBirdUpdate");
+    socket.off("flappyBirdDeath");
+    socket.off("flappyBirdGameOver");
   };
 }

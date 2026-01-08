@@ -247,6 +247,16 @@ function startFlappyBirdGame() {
 function broadcastPositions() {
   if (!flappyBirdGameActive) return;
 
+  // Atualizar pipe do servidor (fazer progresso mesmo se nenhum cliente reportar)
+  flappyPipe.x -= 2.5; // mesma velocidade do cliente
+  
+  // Resetar pipe quando sai da tela
+  if (flappyPipe.x + flappyPipe.width < 0) {
+    flappyPipe.x = 360;
+    flappyPipe.topHeight = randomPipeHeight();
+  }
+
+  // Enviar para TODOS os clientes o estado atual
   io.emit("flappyBirdUpdate", {
     birds: flappyBirds,
     pipe: flappyPipe
@@ -675,12 +685,7 @@ io.on("connection", (socket) => {
       bird.y = data.y;
       bird.vy = data.vy;
       bird.score = data.score;
-      
-      // Se apenas 1 pássaro vivo, atualizar a posição do pipe recebida
-      const aliveBirds = flappyBirds.filter(b => b.alive);
-      if (aliveBirds.length === 1 && data.pipe) {
-        flappyPipe = data.pipe;
-      }
+      // Não atualizar pipe aqui - o servidor mantém itém em broadcastPositions()
     }
   });
 

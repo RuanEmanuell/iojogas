@@ -757,10 +757,43 @@ socket.on("impostorVoteAck", ({ targetId }: { targetId: string }) => {
 
 socket.on("impostorError", ({ message }: { message: string }) => {
   alert(message)
+  // Quando há erro, recriar o menu de seleção de jogos
+  const leader = playerListCache.find(p => p.leader);
+  
+  if (leader && leader.id === socket.id && !document.querySelector("#game-mode-container")) {
+    // Recria o menu
+    const gameModeContainer = document.createElement("div")
+    gameModeContainer.id = "game-mode-container"
+    gameModeContainer.classList.add("flex", "flex-col", "gap-4", "mb-6", "items-center", "w-full", "max-w-md")
+    gameModeContainer.innerHTML = `
+      <h2 class="text-3xl font-bold text-white mb-4">Escolha o Jogo</h2>
+      <button id="select-quiz" class="w-full bg-blue-600 hover:bg-blue-800 px-8 py-6 rounded-xl font-bold text-2xl transition-all shadow-lg hover:scale-105">
+        🎯 Quiz
+      </button>
+      <button id="select-flappybird" class="w-full bg-purple-600 hover:bg-purple-800 px-8 py-6 rounded-xl font-bold text-2xl transition-all shadow-lg hover:scale-105">
+        🐦 Flappy Bird
+      </button>
+      <button id="select-impostor" class="w-full bg-red-600 hover:bg-red-800 px-8 py-6 rounded-xl font-bold text-2xl transition-all shadow-lg hover:scale-105">
+        🕵️ Impostor
+      </button>
+    `
+    document.querySelector("#app")?.appendChild(gameModeContainer)
+
+    document.querySelector("#select-quiz")?.addEventListener("click", () => {
+      // showQuizConfig()
+    })
+
+    document.querySelector("#select-flappybird")?.addEventListener("click", () => {
+      startFlappyBird()
+    })
+
+    document.querySelector("#select-impostor")?.addEventListener("click", () => {
+      startImpostor()
+    })
+  }
 })
 
 function startImpostor() {
-  document.querySelector("#game-mode-container")?.remove()
   socket.emit("startImpostorGame")
 }
 

@@ -75,5 +75,10 @@ export const impostorWords = [
   "caderno",
   "caneca",
   "fusca",
-  "china"
+  "china",
+  "naruto",
+  "roblox",
+  "minecraft",
+  "sushi",
+  "brasil"
 ];
