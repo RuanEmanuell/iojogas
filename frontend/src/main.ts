@@ -530,6 +530,7 @@ function ensureImpostorUI() {
       </div>
       <div id="vote-section" class="bg-gray-800 rounded-lg p-4">
         <div class="font-semibold mb-3 text-center text-lg">Votar para eliminar</div>
+        <div id="impostor-vote-count" class="text-sm text-gray-400 mb-2 text-center"></div>
         <div id="impostor-vote" class="flex flex-wrap gap-2 justify-center"></div>
       </div>
       <div id="impostor-status" class="text-center text-yellow-300 mt-4 font-semibold"></div>
@@ -580,12 +581,23 @@ function updateImpostorAlive(players: string[]) {
   })
 }
 
-function renderImpostorVoteButtons(alive: string[]) {
+function renderImpostorVoteButtons(alive: string[], voteCount?: Record<string, number>) {
   if (!impostorUI.voteList) return
   impostorUI.voteList.replaceChildren()
 
   const voteSection = document.querySelector("#vote-section")
   if (!voteSection) return
+
+  // Atualizar contador de votos
+  const voteCountEl = document.querySelector("#impostor-vote-count")
+  if (voteCountEl && voteCount) {
+    const votesArray = alive.map(id => {
+      const player = playerListCache.find(p => p.id === id)
+      const count = voteCount[id] || 0
+      return `${player?.name || id}: ${count}`
+    }).join(" | ")
+    voteCountEl.textContent = `Votos: ${votesArray}`
+  }
 
   alive.forEach(id => {
     if (id === socket.id) return
@@ -694,7 +706,7 @@ socket.on("impostorTimer", (data: { phase: ImpostorPhase, timeLeft: number, roun
   updateImpostorAlive(data.alive)
 })
 
-socket.on("impostorVoteStart", (data: { timeLeft: number, alive: string[], round: number }) => {
+socket.on("impostorVoteStart", (data: { timeLeft: number, alive: string[], round: number, voteCount?: Record<string, number> }) => {
   // Atualiza fase para votação e reseta voto
   impostorUI.currentPhase = "vote"
   impostorUI.hasVoted = false
@@ -709,7 +721,7 @@ socket.on("impostorVoteStart", (data: { timeLeft: number, alive: string[], round
   if (voteSection) voteSection.style.display = "block"
   
   updateImpostorAlive(data.alive)
-  renderImpostorVoteButtons(data.alive)
+  renderImpostorVoteButtons(data.alive, data.voteCount)
 })
 
 socket.on("impostorVoteResult", (data: { eliminated: string | null, tie: boolean, alive: string[], round: number }) => {
@@ -729,6 +741,19 @@ socket.on("impostorVoteResult", (data: { eliminated: string | null, tie: boolean
   }
   
   updateImpostorAlive(data.alive)
+})
+
+socket.on("impostorVoteUpdate", (data: { voteCount: Record<string, number>, alive: string[] }) => {
+  // Atualizar contador de votos em tempo real
+  const voteCountEl = document.querySelector("#impostor-vote-count")
+  if (voteCountEl) {
+    const votesArray = data.alive.map(id => {
+      const player = playerListCache.find(p => p.id === id)
+      const count = data.voteCount[id] || 0
+      return `${player?.name || id}: ${count}`
+    }).join(" | ")
+    voteCountEl.textContent = `Votos: ${votesArray}`
+  }
 })
 
 socket.on("impostorGameOver", (data: { winner: "crew" | "impostor", impostorId: string | null, word: string | null }) => {

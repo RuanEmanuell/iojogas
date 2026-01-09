@@ -351,7 +351,8 @@ function startImpostorVotePhase() {
   io.emit("impostorVoteStart", {
     timeLeft: impostorTimeLeft,
     round: impostorRound,
-    alive: Array.from(impostorAlive)
+    alive: Array.from(impostorAlive),
+    voteCount: getVoteCount()
   });
 
   startImpostorTimer(() => endImpostorVotePhase());
@@ -382,6 +383,14 @@ function computeVoteResult() {
   }
 
   return { eliminated: topId, tie: false };
+}
+
+function getVoteCount(): Record<string, number> {
+  const tally: Record<string, number> = {};
+  Object.values(impostorVotes).forEach(targetId => {
+    tally[targetId] = (tally[targetId] || 0) + 1;
+  });
+  return tally;
 }
 
 function checkImpostorWinConditions() {
@@ -715,10 +724,29 @@ io.on("connection", (socket) => {
     if (!impostorGameActive || impostorPhase !== "vote") return
     if (!impostorAlive.has(socket.id)) return;
     if (!impostorAlive.has(targetId)) return;
+    if (socket.id === targetId) return; // Não pode votar em si mesmo
 
     impostorVotes[socket.id] = targetId;
 
     io.to(socket.id).emit("impostorVoteAck", { targetId });
+
+    // Broadcast do contador de votos atualizado
+    io.emit("impostorVoteUpdate", {
+      voteCount: getVoteCount(),
+      alive: Array.from(impostorAlive)
+    });
+
+    // Verifica se todos votaram
+    const alivePlayers = Array.from(impostorAlive);
+    const votedPlayers = Object.keys(impostorVotes);
+    if (alivePlayers.length > 0 && votedPlayers.length === alivePlayers.length) {
+      // Todos votaram - encerra a votação imediatamente
+      if (impostorTimer) {
+        clearInterval(impostorTimer);
+        impostorTimer = null;
+      }
+      endImpostorVotePhase();
+    }
   });
 });
 
